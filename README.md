@@ -51,7 +51,15 @@
    - [D. Tabel Matriks Perbandingan Pembeda Utama (SQLi vs XSS vs CSRF)](#d-tabel-matriks-perbandingan-pembeda-utama-sqli-vs-xss-vs-csrf)
    - [E. Analisis Eksploitasi Berantai (Chained Attack XSS ke CSRF pada Video Dosen)](#e-analisis-eksploitasi-berantai-chained-attack-xss-ke-csrf-pada-video-dosen)
    - [F. Strategi Pertahanan & Mitigasi Resmi Masing-Masing Kerentanan](#f-strategi-pertahanan--mitigasi-resmi-masing-masing-kerentanan)
-
+15. [Daftar Lengkap Port & Protokol Jaringan yang Bersinggungan dalam Praktikum](#15-daftar-lengkap-port--protokol-jaringan-yang-bersinggungan-dalam-praktikum)
+   - [A. Port 80 (TCP / HTTP) - Web Server DVWA & Target Utama Serangan](#a-port-80-tcp--http---web-server-dvwa--target-utama-serangan)
+   - [B. Port 443 (TCP / HTTPS) - Web Terenkripsi, TLS SNI, & Audit SpiderFoot](#b-port-443-tcp--https---web-terenkripsi-tls-sni--audit-spiderfoot)
+   - [C. Port 3306 (TCP / MySQL-MariaDB) - Backend Database DVWA & Target SQL Injection](#c-port-3306-tcp--mysql-mariadb---backend-database-dvwa--target-sql-injection)
+   - [D. Port 53 (UDP-TCP / DNS) - Domain Name System & Target DoS UDP Flood](#d-port-53-udp-tcp--dns---domain-name-system--target-dos-udp-flood)
+   - [E. Port 22 (TCP / SSH) - Remote Server Administration, Hardening UFW, & Brute Force](#e-port-22-tcp--ssh---remote-server-administration-hardening-ufw--brute-force)
+   - [F. Port 5001 (TCP / HTTP CherryPy) - Dashboard GUI SpiderFoot OSINT Framework](#f-port-5001-tcp--http-cherrypy---dashboard-gui-spiderfoot-osint-framework)
+   - [G. Protokol ICMP (Layer 3 - Tanpa Port) - Uji Konektivitas Ping & DoS Echo Burst](#g-protokol-icmp-layer-3---tanpa-port---uji-konektivitas-ping--dos-echo-burst)
+   - [H. Tabel Matriks Komprehensif Seluruh Port dan Skenario Pengujian](#h-tabel-matriks-komprehensif-seluruh-port-dan-skenario-pengujian)
 > **Materi Khusus Footprinting & OSINT:** Dokumentasi lengkap mengenai instalasi, konfigurasi 3 filter, analisis SQLite `spiderfoot.db`, dan perbandingan temuan SpiderFoot v4.0.0 dipisahkan ke dalam folder khusus: [SPIDERFOOT/README.md](SPIDERFOOT/README.md).
 
 ---
@@ -1562,3 +1570,98 @@ Jika dosen bertanya: *"Bagaimana cara developer memperbaiki source code agar keb
    * **Terapkan *Anti-CSRF Token (Synchronizer Token Pattern)*:** Setiap formulir perubahan data wajib menyertakan token acak kriptografis yang diverifikasi keabsahannya oleh server sebelum memproses request.
    * **Gunakan Atribut Cookie `SameSite`:** Setel bendera cookie sesi menjadi `SameSite=Strict` atau `SameSite=Lax` agar peramban menolak mengirimkan cookie sesi secara otomatis pada request yang berasal dari domain pihak ketiga.
    * **Wajibkan Re-Autentikasi (Password Lama):** Untuk tindakan sensitif (seperti ganti password atau ubah nomor rekening), wajibkan pengguna memasukkan kembali kata sandi lama mereka.
+
+---
+
+## 15. DAFTAR LENGKAP PORT & PROTOKOL JARINGAN YANG BERSINGGUNGAN DALAM PRAKTIKUM
+
+Dalam ekosistem praktikum keamanan jaringan ini (mencakup instalasi Suricata, LAMP Stack DVWA, eksekusi 4 kelas serangan, eksplorasi rules media sosial, serta OSINT SpiderFoot), terdapat **6 nomor port TCP/UDP utama** dan **1 protokol Layer 3 tanpa port** yang saling bersinggungan.
+
+Berikut adalah rincian lengkap beserta peran teknisnya di setiap komponen praktikum:
+
+---
+
+### A. Port 80 (TCP / HTTP) - Web Server DVWA & Target Utama Serangan
+* **Layanan / Daemon:** Web Server Apache2 (`apache2`) yang melayani aplikasi **DVWA** di VM 2 Ubuntu Server (`192.168.2.3`), serta layanan web HTTP polos di target SpiderFoot (`komputer.ft.unsoed.ac.id`).
+* **Sifat Lalu Lintas:** Teks polos tidak terenkripsi (*cleartext*), memungkinkan parser `http.uri` dan `http.host` Suricata membaca seluruh isi URL, header, dan payload secara langsung.
+* **Keterlibatan Langsung di Praktikum:**
+  1. **Target 3 Serangan Web DVWA:** Seluruh request eksploitasi **SQL Injection**, **XSS (Reflected/DOM)**, dan **CSRF** dikirimkan dari browser Kali Linux menuju Port 80 Apache.
+  2. **Target Serangan DoS Port Layanan:** Perintah `sudo hping3 -S -p 80 -c 50 --faster 192.168.2.3` menargetkan Port 80 untuk membanjiri backlog koneksi web server.
+  3. **Custom Rule Deteksi & IPS:** Menjadi kunci destinasi pada hampir seluruh rule web (`alert http any any -> $HOME_NET 80 ...`, `alert tcp any any -> $HOME_NET 80 ...`, `drop http ... 80`, dan Rule Facebook HTTP `sid:1000045`).
+  4. **Hardening Firewall UFW:** Port wajib yang dibuka (`sudo ufw allow 22,80,443/tcp`).
+  5. **Audit SpiderFoot:** Terdeteksi terbuka aktif oleh modul `sfp_portscan_tcp` pada target `komputer.ft.unsoed.ac.id`.
+
+---
+
+### B. Port 443 (TCP / HTTPS) - Web Terenkripsi, TLS SNI, & Audit SpiderFoot
+* **Layanan / Daemon:** Protokol HTTP over TLS/SSL (*HTTPS*) untuk komunikasi web terenkripsi.
+* **Sifat Lalu Lintas:** Terenkripsi secara end-to-end. Isi payload URL dan body tidak bisa dibaca oleh `http.uri`, tetapi nama domain tujuan tetap terbaca dalam teks polos pada ekstensi **SNI (*Server Name Indication*)** di paket jabat tangan awal *TLS Client Hello*.
+* **Keterlibatan Langsung di Praktikum:**
+  1. **Custom Rule Eksplorasi Media Sosial:** Digunakan untuk mendeteksi dan memblokir akses ke Instagram (`sid:1000040`, `sid:1000042`) dan Facebook (`sid:1000041`) via parser `tls` dan buffer `tls.sni` pada port tujuan `443`.
+  2. **Alternatif Target DoS HTTPS:** Di Modul Praktikum Bab 3 (Hal. 21), port 443 disebutkan sebagai sasaran DoS SYN Flood jika server mengaktifkan layanan HTTPS.
+  3. **Hardening Firewall UFW:** Port wajib yang dibuka (`sudo ufw allow 22,80,443/tcp`).
+  4. **Audit SpiderFoot:** Terdeteksi terbuka oleh `sfp_portscan_tcp` pada `soedirmanrobotic.com` dan `komputer.ft.unsoed.ac.id` (dengan sertifikat TLS Let's Encrypt RSA 2048-bit dan 4096-bit).
+
+---
+
+### C. Port 3306 (TCP / MySQL-MariaDB) - Backend Database DVWA & Target SQL Injection
+* **Layanan / Daemon:** Sistem manajemen basis data relasional **MariaDB / MySQL** (`mariadbd`) di VM 2 Ubuntu Server.
+* **Sifat Lalu Lintas:** Protokol biner internal database. Secara default hanya mendengarkan koneksi lokal dari mesin itu sendiri (`127.0.0.1:3306`).
+* **Keterlibatan Langsung di Praktikum:**
+  1. **Konfigurasi `config.inc.php` (Video Dosen `DVWA.mkv`):** Ditetapkan secara eksplisit pada baris `$_DVWA[ 'db_port' ] = '3306';` agar aplikasi PHP DVWA dapat terhubung ke skema database `dvwa`.
+  2. **Koneksi Antar-Proses Aplikasi (3-Tier Flow):** Saat penyerang mengirim SQL Injection melalui **Port 80** ke Apache, skrip PHP DVWA meneruskan kueri berbahaya tersebut (`' OR '1'='1`) secara internal menuju **Port 3306** MariaDB. MariaDB kemudian memuntahkan isi tabel `users` (username & hash password) kembali ke PHP untuk ditampilkan di browser penyerang.
+  3. **Keamanan & Isolasi `$HOME_NET`:** Karena komunikasi antara Apache dan MariaDB di Port 3306 berjalan melalui antarmuka loopback (`127.0.0.1`), kita menyertakan `127.0.0.0/8` di dalam `$HOME_NET` pada `suricata.yaml` agar lalu lintas internal database ini dipercaya oleh Suricata.
+  4. **Hardening Firewall UFW:** Port 3306 **SENGAJA TIDAK DIBUKA** pada aturan `ufw allow 22,80,443/tcp` agar pihak luar tidak dapat login langsung (*remote direct access*) ke server database dari jaringan luar.
+
+---
+
+### D. Port 53 (UDP-TCP / DNS) - Domain Name System & Target DoS UDP Flood
+* **Layanan / Daemon:** *Domain Name System (DNS)* — layanan penerjemah nama domain manusia (seperti `instagram.com` atau `komputer.ft.unsoed.ac.id`) menjadi alamat IP numerik (`103.9.22.82`).
+* **Sifat Protokol:** Menggunakan **Port 53 UDP** untuk permintaan resolusi (*DNS Query*) reguler yang cepat, dan **Port 53 TCP** untuk transfer zona atau muatan paket berukuran besar (*DNSSEC*).
+* **Keterlibatan Langsung di Praktikum:**
+  1. **Target Simulasi DoS UDP Flood (Bab 3 & Bab 5 Modul Praktikum):**
+     * Serangan: `sudo hping3 --udp --flood -p 53 192.168.2.3`.
+     * Rule Deteksi Modul: `alert udp any any -> $HOME_NET 53 (msg:"UDP BURST TO DNS PORT DETECTED"; ... sid:1000003; rev:1;)`.
+  2. **Custom Rule Deteksi Domain Media Sosial (Layer Resolusi):**
+     * Mendeteksi klien yang menanyakan alamat IP Instagram (`sid:1000043`) atau Facebook (`sid:1000044`) ke server DNS sebelum koneksi web terbentuk, menggunakan parser `dns` dan sticky buffer `dns.query` menuju port `53`.
+  3. **Mekanisme Pengujian SpiderFoot:** Modul `sfp_dnsresolve` dan `sfp_dnsraw` melakukan query langsung ke resolver DNS pada port 53 untuk memetakan rekaman A, MX, NS, dan TXT target.
+
+---
+
+### E. Port 22 (TCP / SSH) - Remote Server Administration, Hardening UFW, & Brute Force
+* **Layanan / Daemon:** *OpenSSH Server (`sshd`)* untuk akses terminal jarak jauh yang terenkripsi ke VM 2 Ubuntu Server.
+* **Keterlibatan Langsung di Praktikum:**
+  1. **Instalasi VM 2 (Modul Praktikum Bab 1 Hal. 8):** Praktikan mencentang opsi *"Install OpenSSH server"* saat memasang Ubuntu Server agar VM dapat dikelola secara headless dari Windows/Kali.
+  2. **Hardening Keamanan SSH (Modul Bab 1 Hal. 10):** Mengubah pengaturan `/etc/ssh/sshd_config` menjadi `PermitRootLogin no` agar akun root tidak dapat ditebak langsung dari luar, serta membuka akses di firewall: `sudo ufw allow 22,80,443/tcp`.
+  3. **Target Simulasi Brute Force (Modul Bab 6 & Bab 7):** Menjadi sasaran utama serangan tebak password otomatis menggunakan utilitas **Hydra** dan **Medusa** di Kali Linux.
+
+---
+
+### F. Port 5001 (TCP / HTTP CherryPy) - Dashboard GUI SpiderFoot OSINT Framework
+* **Layanan / Daemon:** Mikroframework web server Python **CherryPy** bawaan framework **SpiderFoot v4.0.0**.
+* **Keterlibatan Langsung di Praktikum:**
+  1. **Peluncuran Web UI OSINT:** Dijalankan melalui perintah `python sf.py -l 127.0.0.1:5001`.
+  2. **Isolasi Keamanan Loopback:** Sengaja diikat (*binding*) ke alamat loopback lokal `127.0.0.1` pada Port `5001` (bukan `0.0.0.0`) agar antarmuka kontrol pemindai SpiderFoot hanya bisa diakses oleh penguji sendiri di perangkat lokal dan tidak terekspos ke jaringan luar.
+
+---
+
+### G. Protokol ICMP (Layer 3 - Tanpa Port) - Uji Konektivitas Ping & DoS Echo Burst
+* **Layanan / Protokol:** *Internet Control Message Protocol (ICMP)*, bernomor protokol `1` pada header IP.
+* **Catatan Penting Ujian Lisan:** Berbeda dengan TCP dan UDP (Layer 4), **ICMP bekerja di Layer 3 (Network Layer) sehingga TIDAK MEMILIKI NOMOR PORT**. Di dalam rule Suricata, kolom port sumber dan port tujuan untuk ICMP **WAJIB ditulis `any`**, dan jenis paketnya dibedakan menggunakan parameter **`itype`** (`itype:8` untuk *Echo Request* / permintaan ping, dan `itype:0` untuk *Echo Reply* / balasan ping).
+* **Keterlibatan Langsung di Praktikum:**
+  1. **Uji Konektivitas Antar-VM:** `ping -c 3 192.168.2.3`.
+  2. **Rule Deteksi ICMP Ping & Burst (Bab 5 Modul):** `alert icmp any any -> $HOME_NET any (... itype:8; ... sid:1000002;)`.
+
+---
+
+### H. Tabel Matriks Komprehensif Seluruh Port dan Skenario Pengujian
+
+| Nomor Port | Protokol L4/L3 | Nama Layanan | Lokasi Berjalan | Peran & Skenario di Praktikum / Ujian Lisan |
+|---|---|---|---|---|
+| **80** | **TCP** | **HTTP (Apache / DVWA)** | VM 2 Ubuntu (`192.168.2.3`) | Sasaran utama **SQLi, XSS, CSRF**, target **DoS SYN Flood** (`hping3 -p 80`), dan deteksi **HTTP Host Facebook** (`sid:1000045`). |
+| **443** | **TCP** | **HTTPS (TLS/SSL)** | Server Publik / Internet | Sasaran deteksi & pemblokiran **Instagram/Facebook via TLS SNI** (`sid:1000040`, `1000041`), serta diaudit sertifikatnya oleh SpiderFoot. |
+| **3306** | **TCP** | **MySQL / MariaDB** | VM 2 Ubuntu (`127.0.0.1`) | Database backend DVWA (`dvwa.users`). Ditembus secara tidak langsung oleh payload **SQLi** dari port 80; **ditutup di firewall UFW**. |
+| **53** | **UDP / TCP** | **DNS (Domain Name System)** | DNS Server / Router | Sasaran **DoS UDP Flood** (`hping3 --udp -p 53`, `sid:1000003`), rule deteksi **DNS Query Medsos** (`sid:1000043`, `1000044`), dan resolusi SpiderFoot. |
+| **22** | **TCP** | **SSH (OpenSSH)** | VM 2 Ubuntu (`192.168.2.3`) | Akses remote server Ubuntu, dikonfigurasi di UFW (`allow 22`), diamankan dengan `PermitRootLogin no`, target **Brute Force** Bab 6 Modul. |
+| **5001** | **TCP** | **CherryPy (SpiderFoot UI)**| Host / Kali (`127.0.0.1`) | Port antarmuka Web GUI SpiderFoot v4.0.0 (`python sf.py -l 127.0.0.1:5001`) untuk menjalankan scan dan melihat tab Browse/Log/Graph. |
+| **N/A (Layer 3)**| **ICMP** | **Ping (Echo Request/Reply)**| Lapisan Jaringan (IP Proto 1) | Pengujian ping konektivitas VM 1 $\leftrightarrow$ VM 2 dan rule **ICMP Echo Burst** (`itype:8; sid:1000002`). |
