@@ -1188,15 +1188,19 @@ alert tls $HOME_NET any -> $EXTERNAL_NET 443 (msg:"[POLICY VIOLATION] Akses ke I
 
 #### 2. Rule Deteksi Akses Facebook via TLS SNI:
 ```text
-alert tls $HOME_NET any -> $EXTERNAL_NET 443 (msg:"[POLICY VIOLATION] Akses ke Facebook Terdeteksi via TLS SNI"; flow:established,to_server; tls.sni; content:"facebook.com"; nocase; classtype:policy-violation; sid:1000041; rev:1;)
+# Versi Lab VirtualBox (Rekomendasi Praktikum):
+alert tls any any -> any 443 (msg:"[POLICY VIOLATION] Akses ke Facebook Terdeteksi via TLS SNI"; flow:established,to_server; tls.sni; content:"facebook.com"; nocase; classtype:policy-violation; sid:1000041; rev:2;)
+
+# Versi Gateway/Router Enterprise:
+alert tls $HOME_NET any -> $EXTERNAL_NET 443 (msg:"[POLICY VIOLATION] Akses ke Facebook Terdeteksi via TLS SNI"; flow:established,to_server; tls.sni; content:"facebook.com"; nocase; classtype:policy-violation; sid:1000041; rev:2;)
 ```
 * **Bedah Kata per Kata:**
   * **`alert`**: Aksi Mode IDS, catat insiden ke berkas log `fast.log`, izinkan paket tetap melintas ke peramban.
   * **`tls`**: Parser protokol lapisan aplikasi TLS/SSL Suricata.
-  * **`$HOME_NET`** (Source IP): Komputer pengguna/karyawan/mahasiswa di dalam jaringan lokal yang mencoba membuka Facebook.
+  * **`any`** (Source IP): Alamat IP pengirim penyerang/penguji dari mana saja (mendukung IP Kali Linux `192.168.2.2`). Pada versi enterprise digunakan `$HOME_NET`.
   * **`any`** (Source Port): Nomor port klien peramban pengguna yang bersifat dinamis/acak.
   * **`->`** (*Direction Operator*): Arah aliran lalu lintas satu arah dari pengguna lokal keluar menuju server internet.
-  * **`$EXTERNAL_NET`** (Destination IP): Alamat IP server publik Meta/Facebook di internet luar.
+  * **`any`** (Destination IP): Alamat IP tujuan mana saja (mendukung IP server Ubuntu `192.168.2.3`). Pada versi enterprise digunakan `$EXTERNAL_NET`.
   * **`443`** (Destination Port): Nomor port baku protokol web terenkripsi HTTPS.
   * **`msg:"[POLICY VIOLATION] Akses ke Facebook Terdeteksi via TLS SNI"`**: Teks pesan peringatan deskriptif yang dicetak ke berkas log.
   * **`flow:established,to_server;`**:
@@ -1207,8 +1211,7 @@ alert tls $HOME_NET any -> $EXTERNAL_NET 443 (msg:"[POLICY VIOLATION] Akses ke F
   * **`nocase;`**: Mengabaikan perbedaan huruf besar dan huruf kecil (*case-insensitive*).
   * **`classtype:policy-violation;`**: Klasifikasi kategori pelanggaran kebijakan penggunaan jaringan internal organisasi.
   * **`sid:1000041;`**: Signature ID unik 1000041.
-  * **`rev:1;`**: Nomor versi revisi rule ke-1.
----
+  * **`rev:2;`**: Nomor versi revisi rule ke-2 (revisi kompatibilitas header lab).
 
 ### C. Solusi Layer 2: Deteksi via DNS Query Port 53 (Sebelum Koneksi Terbentuk)
 
@@ -1239,12 +1242,16 @@ alert dns $HOME_NET any -> any 53 (msg:"[POLICY VIOLATION] Query DNS untuk Domai
 
 #### 2. Rule Deteksi Pencarian DNS Facebook:
 ```text
-alert dns $HOME_NET any -> any 53 (msg:"[POLICY VIOLATION] Query DNS untuk Domain Facebook Terdeteksi"; flow:to_server; dns.query; content:"facebook.com"; nocase; classtype:policy-violation; sid:1000044; rev:1;)
+# Versi Lab VirtualBox (Rekomendasi Praktikum):
+alert dns any any -> any 53 (msg:"[POLICY VIOLATION] Query DNS untuk Domain Facebook Terdeteksi"; flow:to_server; dns.query; content:"facebook.com"; nocase; classtype:policy-violation; sid:1000044; rev:2;)
+
+# Versi Gateway/Router Enterprise:
+alert dns $HOME_NET any -> any 53 (msg:"[POLICY VIOLATION] Query DNS untuk Domain Facebook Terdeteksi"; flow:to_server; dns.query; content:"facebook.com"; nocase; classtype:policy-violation; sid:1000044; rev:2;)
 ```
 * **Bedah Kata per Kata:**
   * **`alert`**: Aksi Mode IDS, catat kejadian ke log tanpa memutus query.
   * **`dns`**: Parser protokol aplikasi DNS Suricata.
-  * **`$HOME_NET`** (Source IP): Klien lokal yang melakukan pencarian domain.
+  * **`any`** (Source IP): Klien lokal yang melakukan pencarian domain. Pada versi enterprise digunakan `$HOME_NET`.
   * **`any`** (Source Port): Port pengirim acak klien.
   * **`->`** (*Direction Operator*): Arah paket dari klien ke server DNS.
   * **`any`** (Destination IP): Server DNS tujuan mana saja di jaringan lokal atau internet.
@@ -1256,7 +1263,7 @@ alert dns $HOME_NET any -> any 53 (msg:"[POLICY VIOLATION] Query DNS untuk Domai
   * **`nocase;`**: Case-insensitive untuk parameter content.
   * **`classtype:policy-violation;`**: Kategori pelanggaran kebijakan jaringan.
   * **`sid:1000044;`**: Signature ID unik 1000044.
-  * **`rev:1;`**: Revisi ke-1.
+  * **`rev:2;`**: Revisi ke-2 (revisi kompatibilitas header lab).
 ---
 
 ### D. Solusi Layer 3: Deteksi via HTTP Host Header Port 80
