@@ -33,6 +33,12 @@
    - [D. Bedah Temuan Dua Target: Cloud Vercel vs On-Premise Kampus](#d-bedah-temuan-dua-target-cloud-vercel-vs-on-premise-kampus)
    - [E. Kueri SQL Forensik Basis Data Internal spiderfoot.db](#e-kueri-sql-forensik-basis-data-internal-spiderfootdb)
    - [F. Bank Pertanyaan Ujian Lisan Seputar SpiderFoot](#f-bank-pertanyaan-ujian-lisan-seputar-spiderfoot)
+13. [Panduan Lengkap Cara Mengecek Path dan Lokasi fast.log](#13-panduan-lengkap-cara-mengecek-path-dan-lokasi-fastlog)
+   - [A. Metode 1: Memeriksa Berkas Konfigurasi suricata.yaml (Metode Resmi)](#a-metode-1-memeriksa-berkas-konfigurasi-suricatayaml-metode-resmi)
+   - [B. Metode 2: Memeriksa Informasi Build Biner Suricata](#b-metode-2-memeriksa-informasi-build-biner-suricata)
+   - [C. Metode 3: Mencari Berkas Fisik di Direktori Sistem via find](#c-metode-3-mencari-berkas-fisik-di-direktori-sistem-via-find)
+   - [D. Metode 4: Menginspeksi File Descriptor Proses Aktif via lsof (Metode Forensik)](#d-metode-4-menginspeksi-file-descriptor-proses-aktif-via-lsof-metode-forensik)
+   - [E. Metode 5: Memeriksa Ukuran dan Izin Berkas via ls -lh](#e-metode-5-memeriksa-ukuran-dan-izin-berkas-via-ls--lh)
 
 ---
 
@@ -967,3 +973,118 @@ Seluruh rekaman hasil pemindaian SpiderFoot disimpan secara terpusat pada basis 
    * *Jawaban:* "Karena perbedaan arsitektur hosting. Soedirman Robotic Team di-hosting pada Vercel Anycast Global di mana 1 IP publik dipakai bersama oleh ribuan domain luar di dunia, sehingga modul SpiderFoot menarik ratusan domain tetangga (co-hosts) dan file statis Next.js. Sedangkan Web Komputer adalah server fisik on-premise milik Fakultas Teknik di Purbalingga (IP 103.9.22.82) yang terisolasi khusus untuk institusi pendidikan, sehingga hasilnya sangat terfokus dan bersih dari domain komersial tetangga."
 3. **"Apa celah keamanan paling kritis yang ditemukan SpiderFoot pada web komputer.ft.unsoed.ac.id?"**
    * *Jawaban:* "Ada tiga temuan kritis: Pertama, ketiadaan header Content-Security-Policy (CSP) dan X-Frame-Options yang membuka risiko serangan Clickjacking dan XSS. Kedua, temuan 1 Junk File oleh modul sfp_junkfiles yang berpotensi membocorkan file cadangan konfigurasi web server. Ketiga, paparan 1.331 nama personil dan 47 alamat email resmi institusi yang rentan dimanfaatkan penyerang untuk serangan rekayasa sosial bertarget (Spear Phishing)."
+
+---
+
+## 13. PANDUAN LENGKAP CARA MENGECEK PATH DAN LOKASI FAST.LOG
+
+Jika dosen bertanya: *"Dari mana kamu tahu berkas `fast.log` itu ada di `/var/log/suricata/fast.log`? Bagaimana cara mengecek jalurnya dari terminal?"*
+
+Ada **5 metode konkret** di Linux untuk membuktikan lokasi jalur (*path*) berkas `fast.log` tersebut secara ilmiah:
+
+---
+
+### A. Metode 1: Memeriksa Berkas Konfigurasi `suricata.yaml` (Metode Resmi)
+Suricata menentukan lokasi penyimpanan seluruh berkas log melalui variabel `default-log-dir` dan sub-bagian `outputs` pada konfigurasi masternya.
+
+Perintah eksekusi di terminal Ubuntu:
+```bash
+grep -E "default-log-dir|filename: fast.log" /etc/suricata/suricata.yaml
+```
+* **Output yang dihasilkan:**
+  ```yaml
+  default-log-dir: /var/log/suricata/
+        filename: fast.log
+  ```
+* **Bedah Kata per Kata:**
+  * **`grep`** (*Global Regular Expression Print*): Utilitas pencari pola baris teks di Linux.
+  * **`-E`** (*Extended regular expressions flag*): Mengaktifkan operator regex lanjutan seperti tanda pipa `|` (*logika OR*).
+  * **`"default-log-dir|filename: fast.log"`**: Pola pencarian yang menyaring baris yang memuat kata `default-log-dir` ATAU kata `filename: fast.log`.
+  * **`/etc/suricata/suricata.yaml`**: Berkas target konfigurasi master yang dibaca.
+* **Penjelasan Logika:**
+  Direktori pangkalnya adalah `/var/log/suricata/` dan nama berkas log cepatnya adalah `fast.log`. Jika digabungkan, jalur absolutnya menjadi `/var/log/suricata/fast.log`.
+
+---
+
+### B. Metode 2: Memeriksa Informasi Build Biner Suricata
+Biner Suricata menyimpan direktori log *default* yang telah dikompilasi ke dalam kode sumber programnya.
+
+Perintah eksekusi:
+```bash
+suricata --build-info | grep -i "Default log directory"
+```
+* **Output yang dihasilkan:**
+  ```text
+  Default log directory: /var/log/suricata/
+  ```
+* **Bedah Kata per Kata:**
+  * **`suricata`**: Biner aplikasi Suricata.
+  * **`--build-info`**: Parameter saklar diagnostik untuk mencetak seluruh informasi kompilasi, pustaka pendukung, dan jalur direktori sistem bawaan Suricata.
+  * **`|`** (*Pipeline operator*): Mengalirkan output teks dari perintah sebelah kiri menjadi input bagi perintah di sebelah kanan.
+  * **`grep`**: Utilitas penyaring teks.
+  * **`-i`** (*Ignore case flag*): Mengabaikan perbedaan huruf besar dan huruf kecil saat mencocokkan frasa `"Default log directory"`.
+  * **`"Default log directory"`**: String teks spesifik yang dicari.
+
+---
+
+### C. Metode 3: Mencari Berkas Fisik di Direktori Sistem via `find`
+Jika kamu lupa jalurnya dan ingin mencari keberadaan berkas `fast.log` di seluruh folder log sistem operasi Ubuntu:
+
+Perintah eksekusi:
+```bash
+sudo find /var/log/ -name "fast.log" 2>/dev/null
+```
+* **Output yang dihasilkan:**
+  ```text
+  /var/log/suricata/fast.log
+  ```
+* **Bedah Kata per Kata:**
+  * **`sudo`** (*SuperUser DO*): Hak akses root administrator agar diizinkan menyusuri seluruh subfolder sistem di `/var/log/`.
+  * **`find`**: Utilitas pencari berkas dan folder berdasarkan kriteria tertentu pada hierarki direktori Linux.
+  * **`/var/log/`**: Titik pangkal direktori awal tempat pencarian dimulai.
+  * **`-name`** (*Name search flag*): Parameter pencarian berkas berdasarkan kecocokan nama string persis.
+  * **`"fast.log"`**: Nama berkas yang dicari.
+  * **`2>/dev/null`** (*Error redirection*): Mengarahkan aliran pesan error (deskriptor berkas standar nomor `2` / *stderr*, misalnya pesan *Permission Denied*) ke perangkat lubang hitam sistem `/dev/null` agar tidak mengotori layar terminal.
+
+---
+
+### D. Metode 4: Menginspeksi File Descriptor Proses Aktif via `lsof` (Metode Forensik)
+Ini metode paling canggih untuk memukau dosen saat ujian lisan: membuktikan secara fisik bahwa daemon Suricata yang sedang berjalan di RAM benar-benar membuka berkas `fast.log`.
+
+Perintah eksekusi:
+```bash
+sudo lsof -c suricata | grep "fast.log"
+```
+* **Output yang dihasilkan:**
+  ```text
+  suricata 1234 root 5w REG 8,1 45020 131589 /var/log/suricata/fast.log
+  ```
+* **Bedah Kata per Kata:**
+  * **`sudo`**: Hak akses root untuk menginspeksi tabel proses sistem.
+  * **`lsof`** (*List Open Files*): Utilitas Linux untuk menampilkan daftar seluruh berkas dan soket jaringan yang sedang dibuka secara aktif oleh proses di memori.
+  * **`-c`** (*Command name filter flag*): Parameter penyaring daftar proses berdasarkan nama biner aplikasinya.
+  * **`suricata`**: Nama proses yang diinspeksi.
+  * **`|`**: Operator pengalir pipa data teks.
+  * **`grep`**: Penyaring baris teks.
+  * **`"fast.log"`**: Kata kunci yang disaring.
+* **Makna Kolom Output:**
+  Kolom `5w` membuktikan bahwa file descriptor nomor 5 sedang dibuka oleh daemon Suricata dalam mode tulis (*write mode*) menuju berkas fisik `/var/log/suricata/fast.log`.
+
+---
+
+### E. Metode 5: Memeriksa Ukuran dan Izin Berkas via `ls -lh`
+Setelah mengetahui jalurnya, kamu bisa melihat ukuran fisik berkas log dan hak kepemilikannya:
+
+Perintah eksekusi:
+```bash
+ls -lh /var/log/suricata/fast.log
+```
+* **Output yang dihasilkan:**
+  ```text
+  -rw-r----- 1 root root 44K Nov 11 03:15 /var/log/suricata/fast.log
+  ```
+* **Bedah Kata per Kata:**
+  * **`ls`** (*List*): Utilitas Linux untuk mencetak daftar isi berkas atau folder.
+  * **`-l`** (*Long listing format flag*): Menampilkan informasi secara mendalam (mode izin berkas, jumlah hard link, pemilik, grup, ukuran berkas, dan stempel waktu modifikasi).
+  * **`-h`** (*Human-readable flag*): Menampilkan ukuran berkas dalam unit yang mudah dibaca manusia (K untuk Kilobyte, M untuk Megabyte), bukan dalam angka byte mentah.
+  * **`/var/log/suricata/fast.log`**: Jalur absolut berkas target.
