@@ -39,6 +39,13 @@
    - [C. Metode 3: Mencari Berkas Fisik di Direktori Sistem via find](#c-metode-3-mencari-berkas-fisik-di-direktori-sistem-via-find)
    - [D. Metode 4: Menginspeksi File Descriptor Proses Aktif via lsof (Metode Forensik)](#d-metode-4-menginspeksi-file-descriptor-proses-aktif-via-lsof-metode-forensik)
    - [E. Metode 5: Memeriksa Ukuran dan Izin Berkas via ls -lh](#e-metode-5-memeriksa-ukuran-dan-izin-berkas-via-ls--lh)
+14. [Panduan Custom Rules Eksplorasi: Deteksi & Pemblokiran Akses Media Sosial (Instagram & Facebook via TLS SNI, DNS, dan HTTP)](#14-panduan-custom-rules-eksplorasi-deteksi--pemblokiran-akses-media-sosial-instagram--facebook-via-tls-sni-dns-dan-http)
+   - [A. Tantangan Teknis: Mengapa Tidak Bisa Menggunakan http.uri?](#a-tantangan-teknis-mengapa-tidak-bisa-menggunakan-httpuri)
+   - [B. Solusi Layer 1: Deteksi via TLS SNI (Server Name Indication) Port 443 (Metode Utama)](#b-solusi-layer-1-deteksi-via-tls-sni-server-name-indication-port-443-metode-utama)
+   - [C. Solusi Layer 2: Deteksi via DNS Query Port 53 (Sebelum Koneksi Terbentuk)](#c-solusi-layer-2-deteksi-via-dns-query-port-53-sebelum-koneksi-terbentuk)
+   - [D. Solusi Layer 3: Deteksi via HTTP Host Header Port 80](#d-solusi-layer-3-deteksi-via-http-host-header-port-80)
+   - [E. Aturan Mode IPS: Pemblokiran Akses Media Sosial (Action Drop)](#e-aturan-mode-ips-pemblokiran-akses-media-sosial-action-drop)
+   - [F. Cara Uji Coba Cepat & Pembuktian di Terminal](#f-cara-uji-coba-cepat--pembuktian-di-terminal)
 
 ---
 
@@ -1088,3 +1095,149 @@ ls -lh /var/log/suricata/fast.log
   * **`-l`** (*Long listing format flag*): Menampilkan informasi secara mendalam (mode izin berkas, jumlah hard link, pemilik, grup, ukuran berkas, dan stempel waktu modifikasi).
   * **`-h`** (*Human-readable flag*): Menampilkan ukuran berkas dalam unit yang mudah dibaca manusia (K untuk Kilobyte, M untuk Megabyte), bukan dalam angka byte mentah.
   * **`/var/log/suricata/fast.log`**: Jalur absolut berkas target.
+
+---
+
+## 14. PANDUAN CUSTOM RULES EKSPLORASI: DETEKSI & PEMBLOKIRAN AKSES MEDIA SOSIAL (INSTAGRAM & FACEBOOK VIA TLS SNI, DNS, DAN HTTP)
+
+Ini adalah skenario eksplorasi paling populer yang sering diujikan dosen:
+> *"Bagaimana cara membuat custom rule Suricata untuk mendeteksi atau memblokir pengguna di jaringan lokal yang mencoba membuka Instagram atau Facebook?"*
+
+---
+
+### A. Tantangan Teknis: Mengapa Tidak Bisa Menggunakan `http.uri`?
+
+Mahasiswa yang belum paham arsitektur jaringan sering membuat kesalahan fatal dengan menulis rule seperti ini:
+```text
+# SALAH TOTAL (TIDAK AKAN PERNAH BERBUNYI):
+alert http any any -> any 80 (msg:"Buka IG"; http.uri; content:"instagram.com"; sid:1000099; rev:1;)
+```
+* **Penyebab Kegagalan:**
+  1. Layanan Instagram dan Facebook **100% menggunakan protokol HTTPS terenkripsi pada Port 443 TCP**, bukan HTTP Port 80.
+  2. Pada HTTPS, seluruh konten HTTP (URL path, query parameter, dan cookie) dienkripsi menggunakan algoritma TLS/SSL.
+  3. Mesin parser `http.uri` Suricata **tidak bisa membaca data yang terenkripsi**, sehingga rule di atas tidak akan pernah memicu alert.
+
+---
+
+### B. Solusi Layer 1: Deteksi via TLS SNI (Server Name Indication) Port 443 (Metode Utama)
+
+Meskipun lalu lintas HTTPS dienkripsi, terdapat celah pada proses pembentukan jabat tangan TLS (*TLS Handshake RFC 6066*):
+* Ketika peramban klien mengirimkan paket pertama **Client Hello**, peramban wajib menyertakan ekstensi **Server Name Indication (SNI)**.
+* Ekstensi SNI ini memuat nama domain tujuan (misal: `www.instagram.com`) dalam bentuk **teks polos (*plaintext / unencrypted*)** sebelum proses enkripsi simetris dimulai.
+* Suricata memiliki parser protokol lapisan aplikasi khusus bernama **`tls`** dan sticky buffer khusus bernama **`tls.sni`**.
+
+#### 1. Rule Deteksi Akses Instagram via TLS SNI:
+```text
+alert tls $HOME_NET any -> $EXTERNAL_NET 443 (msg:"[POLICY VIOLATION] Akses ke Instagram Terdeteksi via TLS SNI"; flow:established,to_server; tls.sni; content:"instagram.com"; nocase; classtype:policy-violation; sid:1000040; rev:1;)
+```
+* **Bedah Kata per Kata:**
+  * **`alert`**: Aksi Mode IDS, catat insiden ke berkas log tanpa memutus koneksi.
+  * **`tls`**: Parser protokol lapisan aplikasi TLS/SSL Suricata.
+  * **`$HOME_NET`** (Source IP): Komputer pengguna/karyawan/mahasiswa di dalam jaringan lokal yang membuka Instagram.
+  * **`any`** (Source Port): Nomor port klien peramban pengguna yang acak.
+  * **`->`**: Arah lalu lintas paket keluar dari pengguna lokal menuju server luar.
+  * **`$EXTERNAL_NET`** (Destination IP): Server milik Meta/Instagram di internet publik.
+  * **`443`** (Destination Port): Port standar protokol web terenkripsi HTTPS.
+  * **`msg:"[POLICY VIOLATION] Akses ke Instagram Terdeteksi via TLS SNI"`**: Teks pesan peringatan di file log.
+  * **`flow:established,to_server;`**:
+    * `established`: Memastikan jabat tangan TCP Three-Way Handshake telah selesai.
+    * `to_server`: Hanya memeriksa paket permintaan yang keluar dari klien menuju server internet.
+  * **`tls.sni;`**: *Sticky buffer*. Mengarahkan pencarian string secara spesifik hanya pada pointer memori ekstensi Server Name Indication pada paket TLS Client Hello.
+  * **`content:"instagram.com";`**: String nama domain yang dicocokkan (mencakup `www.instagram.com`, `api.instagram.com`, dll).
+  * **`nocase;`**: Mengabaikan perbedaan huruf besar dan kecil.
+  * **`classtype:policy-violation;`**: Klasifikasi pelanggaran kebijakan penggunaan internet organisasi.
+  * **`sid:1000040;`**: Signature ID unik 1000040.
+  * **`rev:1;`**: Revisi ke-1.
+
+#### 2. Rule Deteksi Akses Facebook via TLS SNI:
+```text
+alert tls $HOME_NET any -> $EXTERNAL_NET 443 (msg:"[POLICY VIOLATION] Akses ke Facebook Terdeteksi via TLS SNI"; flow:established,to_server; tls.sni; content:"facebook.com"; nocase; classtype:policy-violation; sid:1000041; rev:1;)
+```
+* **Bedah Kata per Kata:**
+  * Seluruh parameter identik dengan rule Instagram di atas, dengan penggantian string pencocokan target pada buffer `tls.sni` menjadi **`content:"facebook.com";`** dan Signature ID **`sid:1000041;`**.
+
+---
+
+### C. Solusi Layer 2: Deteksi via DNS Query Port 53 (Sebelum Koneksi Terbentuk)
+
+Sebelum komputer pengguna dapat menghubungi server Instagram atau Facebook di port 443, peramban pengguna **wajib menanyakan alamat IP server tersebut ke server DNS** terlebih dahulu pada **Port 53 UDP**.
+
+Suricata memiliki parser protokol **`dns`** dan sticky buffer **`dns.query`**.
+
+#### 1. Rule Deteksi Pencarian DNS Instagram:
+```text
+alert dns $HOME_NET any -> any 53 (msg:"[POLICY VIOLATION] Query DNS untuk Domain Instagram Terdeteksi"; flow:to_server; dns.query; content:"instagram.com"; nocase; classtype:policy-violation; sid:1000043; rev:1;)
+```
+* **Bedah Kata per Kata:**
+  * **`alert`**: Aksi mencatat log.
+  * **`dns`**: Parser protokol DNS Suricata (Layer 7).
+  * **`$HOME_NET any`**: Klien lokal yang melakukan permintaan resolusi domain.
+  * **`-> any 53`**: Menuju ke server DNS mana saja (baik DNS lokal kampus maupun DNS publik seperti 8.8.8.8 atau 1.1.1.1) pada port baku UDP 53.
+  * **`flow:to_server;`**: Paket pertanyaan DNS yang dikirim dari klien menuju server DNS.
+  * **`dns.query;`**: *Sticky buffer*. Mengarahkan pencarian tepat pada field nama domain yang ditanyakan di dalam paket DNS (*Question Section*).
+  * **`content:"instagram.com"; nocase;`**: String domain sasaran.
+  * **`classtype:policy-violation;`**: Kategori pelanggaran kebijakan jaringan.
+  * **`sid:1000043; rev:1;`**: Signature ID 1000043 revisi 1.
+
+#### 2. Rule Deteksi Pencarian DNS Facebook:
+```text
+alert dns $HOME_NET any -> any 53 (msg:"[POLICY VIOLATION] Query DNS untuk Domain Facebook Terdeteksi"; flow:to_server; dns.query; content:"facebook.com"; nocase; classtype:policy-violation; sid:1000044; rev:1;)
+```
+* **Bedah Kata per Kata:**
+  * Seluruh parameter identik dengan rule DNS di atas, dengan target pencarian pada buffer `dns.query` diganti menjadi **`content:"facebook.com";`** dan Signature ID **`sid:1000044;`**.
+
+---
+
+### D. Solusi Layer 3: Deteksi via HTTP Host Header Port 80
+
+Jika pengguna mencoba mengetik alamat tanpa HTTPS (misal mengetik `http://facebook.com`), peramban mengirimkan paket HTTP GET polos ke port 80 sebelum dialihkan (*redirect*) ke HTTPS.
+
+Suricata dapat mendeteksi header `Host:` menggunakan sticky buffer **`http.host`**:
+
+```text
+alert http $HOME_NET any -> $EXTERNAL_NET 80 (msg:"[POLICY VIOLATION] Akses HTTP Polos ke Facebook Terdeteksi"; flow:established,to_server; http.host; content:"facebook.com"; nocase; classtype:policy-violation; sid:1000045; rev:1;)
+```
+* **Bedah Kata per Kata:**
+  * **`alert http`**: Aksi mencatat peringatan pada protokol HTTP port 80.
+  * **`$HOME_NET any -> $EXTERNAL_NET 80`**: Pengguna lokal yang mengakses web server eksternal pada port 80.
+  * **`http.host;`**: *Sticky buffer*. Mengarahkan pencarian string khusus pada baris header `Host:` di dalam paket HTTP request.
+  * **`content:"facebook.com"; nocase;`**: Nama domain host yang dituju.
+  * **`sid:1000045; rev:1;`**: Signature ID 1000045 revisi 1.
+
+---
+
+### E. Aturan Mode IPS: Pemblokiran Akses Media Sosial (Action Drop)
+
+Jika dosen meminta agar akses ke Instagram **langsung diblokir dan tidak boleh terbuka sama sekali**, ubah aksinya menjadi **`drop`** pada mode IPS inline:
+
+```text
+drop tls $HOME_NET any -> $EXTERNAL_NET 443 (msg:"[BLOCKED] Akses ke Instagram Diblokir oleh IPS via TLS SNI"; flow:established,to_server; tls.sni; content:"instagram.com"; nocase; classtype:policy-violation; sid:1000042; rev:1;)
+```
+* **Dampak Teknis:**
+  Begitu peramban pengguna mengirimkan paket TLS Client Hello yang memuat `instagram.com`, Suricata IPS langsung membuang paket tersebut di kernel Linux. Peramban pengguna seketika macet dan menampilkan pesan:
+  > *"Secure Connection Failed / The connection has timed out"*
+
+---
+
+### F. Cara Uji Coba Cepat & Pembuktian di Terminal
+
+1. Masukkan rule TLS dan DNS di atas ke dalam `/etc/suricata/rules/local.rules` di VM Ubuntu.
+2. Lakukan reload rules:
+   ```bash
+   sudo suricatasc -c reload-rules
+   ```
+3. Pantau log alert live:
+   ```bash
+   sudo tail -f /var/log/suricata/fast.log
+   ```
+4. Dari terminal mesin penguji (Kali Linux), jalankan simulasi permintaan domain:
+   * **Menguji Rule DNS (Port 53):**
+     ```bash
+     nslookup instagram.com
+     ```
+     *(Alert DNS `1000043` langsung muncul seketika di `fast.log`)*.
+   * **Menguji Rule TLS SNI (Port 443 HTTPS):**
+     ```bash
+     curl -I -k https://www.instagram.com
+     ```
+     *(Alert TLS SNI `1000040` langsung tercetak di `fast.log`)*.
