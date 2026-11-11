@@ -1445,15 +1445,56 @@ Dalam ranah keamanan aplikasi web (*OWASP Top 10*), SQL Injection (SQLi), Cross-
    * *Syarat Mutlak Berfungsinya CSRF:*
      1. Korban harus sedang memiliki sesi login aktif di aplikasi target.
      2. Permintaan perubahan data (seperti ganti password) tidak memiliki validasi parameter rahasia yang tidak dapat ditebak (*Anti-CSRF Token*).
-3. **Lokasi Eksekusi (*Execution Environment*):**
+3. **Skenario Praktis: CSRF itu Sebenarnya Kayak Gimana? (Analogi Nyata):**
+   * Bayangkan kamu baru saja selesai login ke akun bank kamu di situs `bankku.com`. Sesi loginmu masih aktif di peramban (cookie bank tersimpan).
+   * Tanpa menutup peramban, di tab sebelah kamu membuka link kiriman orang tak dikenal atau situs nonton film gratis `nonton-gratis.xyz`.
+   * Di dalam website `nonton-gratis.xyz` tersebut, penyerang telah menyelipkan kode tersembunyi yang menyuruh perambanmu memanggil:
+     `https://bankku.com/transfer?tujuan=rekening_penyerang&jumlah=10000000`
+   * Karena perambanmu sedang memanggil domain `bankku.com`, peramban **secara otomatis dan tanpa bertanya** melampirkan cookie sesi login bankmu yang sah.
+   * Server `bankku.com` menerima request tersebut dan memeriksa: *"Ada cookie sesi sah milik Afif, berarti request ini asli dari Afif!"*
+   * **Hasil:** Uang 10 juta rupiah terkirim ke rekening penyerang tanpa kamu pernah membuka halaman transfer bank dan tanpa kamu pernah mengklik tombol konfirmasi!
+
+4. **Lewat Mana Serangan CSRF Masuk? (Apakah Lewat URL atau Textform?):**
+   Berbeda dengan XSS yang biasanya dimasukkan lewat *textform* (kolom input nama, kolom komentar, atau kolom pencarian) di dalam website target, **CSRF MASUK DARI LUAR APLIKASI MELALUI TIGA VEKTOR UTAMA**:
+
+   * **Vektor 1: Lewat URL / Link Terbuka (Untuk Aplikasi Berbasis Metode HTTP GET — Seperti di DVWA):**
+     Jika aplikasi memproses aksi perubahan data menggunakan metode GET (seperti form ganti password DVWA), penyerang bisa melancarkannya lewat:
+     * **Tautan Phishing (Social Engineering):** Penyerang mengirim pesan chat: *"Lihat promo ini!"* yang berisi link langsung:
+       `http://192.168.2.3/dvwa/vulnerabilities/csrf/?password_new=hacked123&password_conf=hacked123&Change=Change`
+       Ketika korban (yang sedang login DVWA) mengklik link tersebut, peramban membuka tab baru dan seketika password DVWA korban terganti!
+     * **Tag Gambar Tersembunyi (Zero-Click Exploit):** Penyerang menyisipkan tag gambar di situs web miliknya atau di forum publik:
+       ```html
+       <img src="http://192.168.2.3/dvwa/vulnerabilities/csrf/?password_new=hacked123&password_conf=hacked123&Change=Change" width="0" height="0" style="display:none;">
+       ```
+       Ketika korban membuka halaman tersebut, peramban mengira itu file gambar dan otomatis melakukan request GET ke URL tersebut. Password korban terganti tanpa perlu mengklik tautan apa pun!
+
+   * **Vektor 2: Lewat Formulir Tersembunyi Otomatis (Untuk Aplikasi Berbasis Metode HTTP POST):**
+     Banyak pengembang mengira: *"Kalau ganti password pakai metode POST, pasti kebal CSRF!"* Anggapan ini **100% SALAH**.
+     Penyerang membuat halaman web jebakan di server miliknya (misal `evil.com/hadiah.html`) yang memuat form tersembunyi yang di-submit otomatis oleh JavaScript:
+     ```html
+     <form id="stolenForm" action="http://192.168.2.3/dvwa/vulnerabilities/csrf/" method="POST">
+         <input type="hidden" name="password_new" value="hacked123">
+         <input type="hidden" name="password_conf" value="hacked123">
+         <input type="hidden" name="Change" value="Change">
+     </form>
+     <script>
+         // Otomatis terkirim saat halaman dibuka korban!
+         document.getElementById('stolenForm').submit();
+     </script>
+     ```
+     Begitu korban mengunjungi `evil.com`, peramban korban dipaksa mengirimkan paket HTTP POST ke DVWA membawa cookie sesi aktif korban.
+
+   * **Vektor 3: Lewat Injeksi Skrip XSS (Chained Exploit — Video Dosen `CSRF.mkv`):**
+     Jika aplikasi memasang proteksi token rahasia (*Anti-CSRF Token / `user_token`*) seperti DVWA level High, serangan link luar di atas akan gagal. Penyerang membobolnya dengan mengeksploitasi celah XSS terlebih dahulu untuk mencuri token dari DOM peramban, lalu menembakkan request CSRF yang valid dari dalam.
+
+5. **Lokasi Eksekusi (*Execution Environment*):**
    **SISI KLIEN MEMICU AKSI KE SISI SERVER.**  
    Peramban korban dieksploitasi sebagai "senjata perantara (*confused deputy*)" untuk mengirimkan request pengubahan data yang sah di mata server target.
-4. **Target Serangan:**
+6. **Target Serangan:**
    Fungsi dan logika bisnis aplikasi web yang mengubah status (*state-changing requests*): mengganti kata sandi akun, mengubah alamat email pemulihan, mentransfer dana perbankan, atau memodifikasi izin administratif.
-5. **Dampak terhadap Triad CIA:**
+7. **Dampak terhadap Triad CIA:**
    * **Integrity (Integritas):** Rusak parah (status akun atau data korban diubah paksa atas nama korban tanpa persetujuannya).
    * *Catatan Penting:* CSRF standar **tidak dapat membaca respon data server** (*blind attack*) akibat kebijakan *Same-Origin Policy (SOP)* peramban, sehingga CSRF murni berfokus pada perusakan integritas data, bukan pencurian data.
-
 ---
 
 ### D. Tabel Matriks Perbandingan Pembeda Utama (SQLi vs XSS vs CSRF)
