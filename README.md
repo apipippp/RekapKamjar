@@ -25,6 +25,7 @@
    - [Rule 4: DoS TCP SYN Flood Port 80 DVWA (sid:1000024)](#rule-4-dos-tcp-syn-flood-port-80-dvwa---sid1000024)
    - [Rule 5: Mode IPS - SQL Injection Dropped (sid:1000021 rev:5)](#rule-5-mode-ips---sql-injection-dropped---sid1000021-rev5)
 10. [Konseptual Arsitektur: Mode IDS vs Mode IPS](#10-konseptual-arsitektur-mode-ids-vs-mode-ips)
+11. [FAQ Ujian Lisan: Menjalankan Suricata Mode IDS vs Memantau Log (`tail -f`)](#11-faq-ujian-lisan-menjalankan-suricata-mode-ids-vs-memantau-log)
 
 ---
 
@@ -706,3 +707,75 @@ drop http any any -> $HOME_NET 80 (msg:"[DVWA IPS BLOCK] SQL Injection Dropped";
 | **Format Pencatatan Log** | Ditandai dengan `[**]` di `fast.log` | Ditandai dengan label `[Drop]` di `fast.log` |
 | **Risiko Operasional** | Nol risiko terhadap kelancaran layanan sah | Berisiko memblokir pengguna sah jika terjadi *False Positive* |
 | **Beban Latensi Jaringan** | 0 milidetik (hanya membaca salinan paket) | Ada sedikit latensi mikrodetik karena paket ditahan di antrean kernel |
+
+---
+
+## 11. FAQ UJIAN LISAN: MENJALANKAN SURICATA MODE IDS VS MEMANTAU LOG
+
+### Pertanyaan Jebakan Dosen:
+> *"Bagaimana cara menjalankan Suricata dalam mode IDS? Apakah perintahnya `sudo tail -f /var/log/suricata/fast.log`?"*
+
+**JAWABAN TEGAS: BUKAN.**  
+`sudo tail -f /var/log/suricata/fast.log` **BUKAN** perintah untuk menjalankan Suricata. Perintah `tail -f` hanyalah program pembaca berkas teks untuk melihat isi buku catatan log secara real-time. Jika mesin Suricata mati, perintah `tail -f` tetap terbuka di layar, namun kosong dan tidak akan mendeteksi serangan apa pun.
+
+#### Analogi Sederhana:
+* **Menjalankan Mesin Suricata (`systemctl start` / `suricata --af-packet`)** = Menyalakan kamera CCTV dan mengarahkan lensanya ke jalan raya.
+* **Menjalankan `tail -f fast.log`** = Menatap layar monitor ruang sekuriti untuk membaca laporan tertulis yang dicatat kamera CCTV.
+
+---
+
+### Empat Cara Resmi Menjalankan Suricata dalam Mode IDS (Beserta Bedah Kata per Kata)
+
+#### 1. Mode IDS Berjalan di Latar Belakang (Background Service Daemon)
+```bash
+sudo systemctl start suricata
+```
+* **`sudo`** (*SuperUser DO*): Menjalankan perintah dengan hak akses root tertinggi Linux.
+* **`systemctl`** (*Systemd Control*): Utilitas pengelola sistem inisialisasi dan layanan daemon (*systemd*).
+* **`start`**: Perintah untuk menyalakan dan menjalankan layanan di latar belakang (*background*). Di balik layar, systemd membaca konfigurasi `af-packet` pada `suricata.yaml` secara otomatis.
+* **`suricata`**: Nama unit layanan sistem (`suricata.service`).
+
+#### 2. Mode IDS Langsung di Terminal via `AF_PACKET` (Live Sniffing Modern)
+```bash
+sudo suricata -c /etc/suricata/suricata.yaml --af-packet=enp0s8 -v
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk mengaktifkan *promiscuous mode* pada antarmuka jaringan.
+* **`suricata`**: Biner aplikasi mesin IDS Suricata.
+* **`-c`** (*Config file flag*): Menentukan lokasi berkas konfigurasi master.
+* **`/etc/suricata/suricata.yaml`**: Jalur absolut file konfigurasi utama Suricata.
+* **`--af-packet=enp0s8`**: Parameter saklar driver tangkap paket berkecepatan tinggi (*Linux AF_PACKET socket*) yang menginstruksikan Suricata menyadap lalu lintas jaringan secara pasif pada kartu jaringan **`enp0s8`**.
+* **`-v`** (*Verbose flag*): Menampilkan proses inisialisasi memori, pengenalan thread, dan pembacaan rules langsung ke layar terminal secara mendetail.
+
+#### 3. Mode IDS Langsung di Terminal via `libpcap` (Live Sniffing Klasik)
+```bash
+sudo suricata -c /etc/suricata/suricata.yaml -i enp0s8 -v
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk membuka soket sniffing mentah.
+* **`suricata`**: Biner aplikasi mesin IDS Suricata.
+* **`-c`** (*Config file flag*): Penunjuk jalur konfigurasi.
+* **`/etc/suricata/suricata.yaml`**: File konfigurasi master Suricata.
+* **`-i`** (*Interface flag*): Parameter penentu nama kartu jaringan fisik/virtual yang disadap menggunakan driver standar *libpcap*.
+* **`enp0s8`**: Nama kartu jaringan Host-Only VirtualBox yang menjadi jalur serangan antara Kali Linux dan Ubuntu.
+* **`-v`** (*Verbose flag*): Menampilkan log diagnostik inisialisasi ke layar terminal.
+
+#### 4. Mode IDS Offline (Membaca Rekaman Paket `.pcap` Forensik)
+```bash
+sudo suricata -c /etc/suricata/suricata.yaml -r _attack_and_normal.pcap -l /var/log/suricata/
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk menulis hasil log ke direktori sistem.
+* **`suricata`**: Biner aplikasi mesin IDS Suricata.
+* **`-c`** (*Config file flag*): Penunjuk jalur konfigurasi.
+* **`/etc/suricata/suricata.yaml`**: File konfigurasi master Suricata.
+* **`-r`** (*Read PCAP flag*): Mengaktifkan mode baca berkas rekaman (*offline replay*). Suricata tidak mendengarkan kartu jaringan, melainkan memproses paket masa lalu di dalam file `.pcap` seolah-olah lewat secara live.
+* **`_attack_and_normal.pcap`**: Nama file rekaman paket jaringan yang dianalisis.
+* **`-l`** (*Log directory flag*): Menentukan direktori folder tujuan penyimpanan hasil laporan log.
+* **`/var/log/suricata/`**: Alamat folder tempat berkas `fast.log` dan `eve.json` hasil analisis disimpan.
+
+---
+
+### Ringkasan Singkat Prosedur di Terminal Saat Live Demo:
+1. **Nyalakan mesin IDS-nya** (di Terminal 1):
+   * Pakai background service: `sudo systemctl start suricata`
+   * *atau* pakai mode langsung CLI: `sudo suricata -c /etc/suricata/suricata.yaml -i enp0s8 -v`
+2. **Buka monitor log-nya** (di Terminal 2):
+   * Pantau hasil deteksinya dengan: `sudo tail -f /var/log/suricata/fast.log`
