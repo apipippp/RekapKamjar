@@ -60,6 +60,13 @@
    - [F. Port 5001 (TCP / HTTP CherryPy) - Dashboard GUI SpiderFoot OSINT Framework](#f-port-5001-tcp--http-cherrypy---dashboard-gui-spiderfoot-osint-framework)
    - [G. Protokol ICMP (Layer 3 - Tanpa Port) - Uji Konektivitas Ping & DoS Echo Burst](#g-protokol-icmp-layer-3---tanpa-port---uji-konektivitas-ping--dos-echo-burst)
    - [H. Tabel Matriks Komprehensif Seluruh Port dan Skenario Pengujian](#h-tabel-matriks-komprehensif-seluruh-port-dan-skenario-pengujian)
+16. [Konsep Signature ID (SID): Definisi, Rentang Alokasi 1 Juta, dan Format Log [GID:SID:REV]](#16-konsep-signature-id-sid-definisi-rentang-alokasi-1-juta-dan-format-log-gidsidrev)
+   - [A. Apa itu SID (Signature ID)?](#a-apa-itu-sid-signature-id)
+   - [B. Kenapa Angkanya Harus 1 Juta ke Atas (1000001 s/d 1000047)?](#b-kenapa-angkanya-harus-1-juta-ke-atas-1000001-sd-1000047)
+   - [C. Tabel Standar Alokasi Rentang Nomor SID Resmi (OISF & Snort)](#c-tabel-standar-alokasi-rentang-nomor-sid-resmi-oisf--snort)
+   - [D. Pemetaan Penomoran SID Praktikum Kita (1000001 s/d 1000047)](#d-pemetaan-penomoran-sid-praktikum-kita-1000001-sd-1000047)
+   - [E. Bedah Format Tiga Angka di fast.log: [GID:SID:REV]](#e-bedah-format-tiga-angka-di-fastlog-gidsidrev)
+
 > **Materi Khusus Footprinting & OSINT:** Dokumentasi lengkap mengenai instalasi, konfigurasi 3 filter, analisis SQLite `spiderfoot.db`, dan perbandingan temuan SpiderFoot v4.0.0 dipisahkan ke dalam folder khusus: [SPIDERFOOT/README.md](SPIDERFOOT/README.md).
 
 ---
@@ -1665,3 +1672,96 @@ Berikut adalah rincian lengkap beserta peran teknisnya di setiap komponen prakti
 | **22** | **TCP** | **SSH (OpenSSH)** | VM 2 Ubuntu (`192.168.2.3`) | Akses remote server Ubuntu, dikonfigurasi di UFW (`allow 22`), diamankan dengan `PermitRootLogin no`, target **Brute Force** Bab 6 Modul. |
 | **5001** | **TCP** | **CherryPy (SpiderFoot UI)**| Host / Kali (`127.0.0.1`) | Port antarmuka Web GUI SpiderFoot v4.0.0 (`python sf.py -l 127.0.0.1:5001`) untuk menjalankan scan dan melihat tab Browse/Log/Graph. |
 | **N/A (Layer 3)**| **ICMP** | **Ping (Echo Request/Reply)**| Lapisan Jaringan (IP Proto 1) | Pengujian ping konektivitas VM 1 $\leftrightarrow$ VM 2 dan rule **ICMP Echo Burst** (`itype:8; sid:1000002`). |
+
+---
+
+## 16. KONSEP SIGNATURE ID (SID): DEFINISI, RENTANG ALOKASI 1 JUTA, DAN FORMAT LOG [GID:SID:REV]
+
+Jika dosen bertanya: *"Apa itu kata kunci `sid`? Kenapa angkanya dimulai dari 1.000.001 sampai 1.000.045? Kenapa harus satu juta, boleh nggak kalau saya tulis sid:1 saja?"*
+
+---
+
+### A. Apa itu SID (Signature ID)?
+* **`sid`** adalah singkatan dari **Signature Identifier** (atau *Snort Identifier* secara historis).
+* **Fungsi Utama:** Bertindak sebagai **Nomor Induk / Kunci Utama Unik (*Primary Key*)** untuk setiap baris rule di dalam engine IDS/IPS Suricata.
+* **Sifat Mutlak:** Tidak boleh ada dua rule yang aktif dengan nomor `sid` yang persis sama. Jika ada nomor `sid` yang bentrok/ganda di dalam file rule, Suricata akan mengeluarkan peringatan `Signature with newer revision, so the older sig replaced` dan menimpa rule dengan revisi lebih rendah.
+
+---
+
+### B. Kenapa Angkanya Harus 1 Juta ke Atas (1000001 s/d 1999999)?
+
+Bolehkah kita membuat rule dengan nomor `sid:1;` atau `sid:500;`?  
+**SECARA TEKNIS BISA, TETAPI SANGAT SALAH SECARA PRAKTIK INDUSTRI (DILARANG KERAS).**
+
+#### Alasannya:
+1. **Konvensi Alokasi Ruang Nomor Standar Internasional:**
+   Pengembang Snort (*Cisco Talos*) dan Suricata (*OISF - Open Information Security Foundation*) telah membagi blok-blok nomor SID ke dalam rentang kepemilikan resmi.
+2. **Menghindari Bentrok Saat `suricata-update`:**
+   Ketika kamu menjalankan perintah `sudo suricata-update`, Suricata mengunduh sekitar **53.000 rule resmi** dari internet (*Emerging Threats / ET Open*). Rule-rule resmi dari internet tersebut menggunakan rentang nomor di bawah 1 juta dan di atas 2 juta.
+   * Jika kamu menggunakan `sid:1` atau `sid:100`, rule buatanmu akan **BENTROK DAN DITOLAK** oleh Suricata karena nomor tersebut sudah dipakai oleh rule resmi internasional (misal rule pendeteksi trojan/worm bawaan).
+3. **Intruksi Resmi Modul Praktikum Dosen (Bab V Hal. 33):**
+   Dosen secara tegas menuliskan petunjuk di buku modul:
+   > *"Gunakan nomor sid mulai dari 1000001 dan seterusnya untuk seluruh rule custom sepanjang semester agar tidak bentrok dengan rule bawaan (ET Open Ruleset dsb.) yang bernomor jauh lebih kecil."*
+
+---
+
+### C. Tabel Standar Alokasi Rentang Nomor SID Resmi (OISF & Snort)
+
+| Rentang Nomor SID | Pemilik / Peruntukan Resmi | Keterangan Penggunaan |
+|---|---|---|
+| **`0 – 99`** | **Reserved (Internal Engine)** | Dicadangkan khusus untuk engine internal Suricata dan Snort. Pengguna dilarang menggunakan rentang ini. |
+| **`100 – 999.999`** | **Official Ruleset (Cisco Talos / VRT)** | Dicadangkan untuk aturan komersial resmi berbayar bawaan Snort Core / Sourcefire Vulnerability Research Team. |
+| **`1.000.000 – 1.999.999`** | **CUSTOM LOCAL RULES (ZONA KHUSUS PENGGUNA / PRAKTIKAN)** | **ZONA KITA!** Seluruh aturan mandiri yang ditulis tangan oleh administrator jaringan lokal, tim SOC, atau mahasiswa praktikum **WAJIB** berada di rentang ini. Dimulai dari `1000001` hingga `1999999`. |
+| **`2.000.000 – 2.999.999`** | **Emerging Threats (ET Open Ruleset)** | Blok nomor milik **53.041 rules** resmi komunitas yang otomatis diunduh oleh perintah `suricata-update` (`/var/lib/suricata/rules/suricata.rules`). |
+| **`3.000.000+`** | **Third-Party Threat Feeds** | Digunakan oleh penyedia feed intelijen pihak ketiga lainnya (seperti Abuse.ch, SSLBL, Feodo Tracker). |
+
+---
+
+### D. Pemetaan Penomoran SID Praktikum Kita (1000001 s/d 1000047)
+
+Dalam praktikum kita, kita mengelompokkan nomor SID secara terstruktur dengan sistem penomoran blok puluhan (*logical grouping*) agar mudah dilacak saat melihat log:
+
+* **Blok 1 (Modul Praktikum Bab V & Bab IX - Standar Dosen):**
+  * `sid:1000001;` $\rightarrow$ DoS SYN Flood Port 80 (Modul Bab V Hal. 32).
+  * `sid:1000002;` $\rightarrow$ DoS ICMP Echo Burst Ping (Modul Bab V Hal. 33).
+  * `sid:1000003;` $\rightarrow$ DoS UDP Burst Port 53 DNS (Modul Bab V Hal. 33).
+  * `sid:1000004;` $\rightarrow$ SQLi UNION SELECT Operator (Modul Bab IX Hal. 48).
+  * `sid:1000005;` $\rightarrow$ SQLi Encoded Quote `%27` (Modul Bab IX Hal. 48).
+  * `sid:1000006;` $\rightarrow$ SQLi Database Fingerprinting `version()` (Modul Bab IX Hal. 48).
+  * `sid:1000007;` $\rightarrow$ SQLi Time-Based Blind `sleep()` (Modul Bab IX Hal. 49).
+* **Blok 2 (Tugas 3 Simulasi DVWA & Serangan):**
+  * `sid:1000021;` $\rightarrow$ SQL Injection Tautology Bypass `' OR '1'='1` (Video Dosen `SQLi.mkv`).
+  * `sid:1000022;` $\rightarrow$ Reflected XSS Event Handler Bypass (Video Dosen `XSS.mkv`).
+  * `sid:1000023;` $\rightarrow$ CSRF Unauthorized Password Change (Video Dosen `CSRF.mkv`).
+  * `sid:1000024;` $\rightarrow$ DoS TCP SYN Flood Khusus Port Layanan DVWA Port 80.
+  * `sid:1000025;` $\rightarrow$ Mode IPS Pemusnahan Paket SQL Injection (`drop`).
+* **Blok 3 (Eksplorasi Custom Rules Media Sosial Instagram & Facebook):**
+  * `sid:1000040;` $\rightarrow$ Deteksi Akses Instagram via TLS SNI Port 443.
+  * `sid:1000041;` $\rightarrow$ Deteksi Akses Facebook via TLS SNI Port 443.
+  * `sid:1000042;` $\rightarrow$ Pemblokiran Mode IPS Akses Instagram via TLS SNI (`drop`).
+  * `sid:1000043;` $\rightarrow$ Deteksi Query DNS untuk Domain Instagram Port 53.
+  * `sid:1000044;` $\rightarrow$ Deteksi Query DNS untuk Domain Facebook Port 53.
+  * `sid:1000045;` $\rightarrow$ Deteksi Akses HTTP Polos ke Facebook Port 80 (`http.host`).
+  * `sid:1000046;` $\rightarrow$ Pemblokiran Mode IPS Akses HTTP Facebook Port 80 (`drop`).
+  * `sid:1000047;` $\rightarrow$ Pemblokiran Mode IPS Akses Facebook via TLS SNI Port 443 (`drop`).
+
+---
+
+### E. Bedah Format Tiga Angka di fast.log: `[GID:SID:REV]`
+
+Ketika sebuah serangan terdeteksi, Suricata selalu mencetak tiga digit angka di awal setiap baris `fast.log`:
+```text
+11/04/2026-03:15:20.123456 [**] [1:1000043:1] [POLICY VIOLATION] Query DNS untuk Domain Instagram Terdeteksi [**] ...
+                                 ┬ ─────── ┬
+                                 │    │    │
+                                GID  SID  REV
+```
+
+1. **Angka Pertama (`1`) = GID (Generator ID):**
+   * Menunjukkan komponen internal Suricata mana yang menghasilkan alert tersebut.
+   * **`GID 1`**: Alert dihasilkan oleh **Mesin Pencocokan Rule Standar (*Standard Rule Engine*)** berdasarkan berkas `.rules` yang kita tulis.
+   * *(Jika angkanya selain 1, misal GID 3 atau GID 119, alert tersebut dihasilkan otomatis oleh preprocessor decoder bawaan sistem, seperti galat HTTP decoder atau anomali fragmentasi IP)*.
+2. **Angka Kedua (`1000043`) = SID (Signature ID):**
+   * Nomor identitas pengenal unik dari rule spesifik yang terpicu. Dengan melihat angka ini, administrator langsung tahu rule mana di file `local.rules` yang sedang bekerja.
+3. **Angka Ketiga (`1`) = REV (Revision Number):**
+   * Nomor versi pembaruan dari rule tersebut (`rev:1`). Jika rule pernah diedit atau disempurnakan (seperti Rule 1000021 rev:2), angka revisi ini akan naik menjadi `2`.
