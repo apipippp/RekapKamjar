@@ -44,6 +44,13 @@
    - [E. Aturan Mode IPS: Pemblokiran Akses Media Sosial (Action Drop)](#e-aturan-mode-ips-pemblokiran-akses-media-sosial-action-drop)
    - [F. Mengapa Mengetik "facebook.com" di Firefox Kali Linux Tidak Menghasilkan Alert?](#f-mengapa-mengetik-facebookcom-di-firefox-kali-linux-tidak-menghasilkan-alert)
    - [G. Dua Cara Praktik Menguji Rule Facebook di Lab (100% Berhasil)](#g-dua-cara-praktik-menguji-rule-facebook-di-lab-100-berhasil)
+14. [Teori & Analisis Komparatif 3 Serangan Web: SQLi, XSS, dan CSRF](#14-teori--analisis-komparatif-3-serangan-web-sqli-xss-dan-csrf)
+   - [A. SQL Injection (SQLi) - Konsep, Lokasi Eksekusi, dan Dampak](#a-sql-injection-sqli---konsep-lokasi-eksekusi-dan-dampak)
+   - [B. Cross-Site Scripting (XSS) - Konsep, Lokasi Eksekusi, dan Dampak](#b-cross-site-scripting-xss---konsep-lokasi-eksekusi-dan-dampak)
+   - [C. Cross-Site Request Forgery (CSRF) - Konsep, Lokasi Eksekusi, dan Dampak](#c-cross-site-request-forgery-csrf---konsep-lokasi-eksekusi-dan-dampak)
+   - [D. Tabel Matriks Perbandingan Pembeda Utama (SQLi vs XSS vs CSRF)](#d-tabel-matriks-perbandingan-pembeda-utama-sqli-vs-xss-vs-csrf)
+   - [E. Analisis Eksploitasi Berantai (Chained Attack XSS ke CSRF pada Video Dosen)](#e-analisis-eksploitasi-berantai-chained-attack-xss-ke-csrf-pada-video-dosen)
+   - [F. Strategi Pertahanan & Mitigasi Resmi Masing-Masing Kerentanan](#f-strategi-pertahanan--mitigasi-resmi-masing-masing-kerentanan)
 
 > **Materi Khusus Footprinting & OSINT:** Dokumentasi lengkap mengenai instalasi, konfigurasi 3 filter, analisis SQLite `spiderfoot.db`, dan perbandingan temuan SpiderFoot v4.0.0 dipisahkan ke dalam folder khusus: [SPIDERFOOT/README.md](SPIDERFOOT/README.md).
 
@@ -1376,3 +1383,141 @@ Jika ingin membuktikan secara visual langsung menggunakan peramban **Mozilla Fir
 5. Firefox di Kali Linux akan menyelesaikan nama `facebook.com` ke IP `192.168.2.3` dan mengirimkan paket HTTP port 80 melewati kartu jaringan `enp0s8`.
 6. Periksa terminal Ubuntu (`sudo tail -f /var/log/suricata/fast.log`), alert `[1:1000045:3]` akan langsung terpicu seketika di layar!
 *(Setelah selesai demonstrasi, hapus kembali baris tersebut dari `/etc/hosts`)*.
+
+---
+
+## 14. TEORI & ANALISIS KOMPARATIF 3 SERANGAN WEB: SQLi, XSS, DAN CSRF
+
+Dalam ranah keamanan aplikasi web (*OWASP Top 10*), SQL Injection (SQLi), Cross-Site Scripting (XSS), dan Cross-Site Request Forgery (CSRF) adalah tiga kelas kerentanan paling mendasar dengan karakteristik, target, dan mekanisme kerja yang sangat berbeda.
+
+---
+
+### A. SQL Injection (SQLi) - Konsep, Lokasi Eksekusi, dan Dampak
+
+1. **Definisi:**
+   Kerentanan di mana penyerang menyisipkan perintah SQL ilegal (*malicious SQL statements*) ke dalam formulir input atau parameter URL aplikasi web yang tidak disanitasi dengan benar, sehingga mesin database mengeksekusi instruksi tersebut di luar niat awal pengembang.
+2. **Akar Masalah (*Root Cause*):**
+   Percampuran antara **Data (input pengguna)** dan **Kode (instruksi query SQL)** dalam satu string kueri yang sama. Mesin parser database tidak mampu membedakan mana batas akhir data masukan pengguna dan mana instruksi tambahan dari penyerang.
+   * *Contoh Kode Rentan di DVWA:*
+     ```php
+     $query  = "SELECT first_name, last_name FROM users WHERE user_id = '$id';";
+     ```
+3. **Lokasi Eksekusi (*Execution Environment*):**
+   **SISI SERVER (Database Engine MariaDB / MySQL).**  
+   Peramban pengguna hanya bertindak sebagai media pengirim; seluruh proses kompilasi kueri dan manipulasi tabel terjadi di dalam CPU dan memori server basis data.
+4. **Target Serangan:**
+   Struktur basis data, tabel sensitif (`users`), kredensial akun, data pribadi pengguna, serta integritas data backend.
+5. **Dampak terhadap Triad CIA:**
+   * **Confidentiality (Kerahasiaan):** Rusak total (penyerang dapat mengekstrak seluruh isi database via teknik `UNION SELECT` atau Tautologi boolean `' OR '1'='1`).
+   * **Integrity (Integritas):** Rusak (penyerang dapat memodifikasi nilai saldo, mengubah role hak akses, atau menghapus tabel via `DROP TABLE`).
+   * **Availability (Ketersediaan):** Rusak (penyerang dapat menyuntikkan fungsi `BENCHMARK()` atau `SLEEP()` berulang-ulang untuk menghabiskan CPU database).
+
+---
+
+### B. Cross-Site Scripting (XSS) - Konsep, Lokasi Eksekusi, dan Dampak
+
+1. **Definisi:**
+   Kerentanan di mana penyerang menyuntikkan skrip kode berbahaya (biasanya bahasa JavaScript) ke dalam halaman web yang sah, sehingga skrip tersebut dieksekusi secara otomatis oleh **peramban (*browser*) milik korban/pengguna lain** yang sedang membuka halaman tersebut.
+2. **Akar Masalah (*Root Cause*):**
+   Aplikasi web menampilkan kembali data yang dimasukkan pengguna ke dalam dokumen HTML tanpa melakukan penyaringan (*sanitization*) atau pengubahan karakter khusus (*context-aware HTML output encoding* seperti `htmlspecialchars`).
+   * *Contoh Kode Rentan di DVWA:*
+     ```php
+     echo '<pre>Hello ' . $_GET[ 'name' ] . '</pre>';
+     ```
+3. **Lokasi Eksekusi (*Execution Environment*):**
+   **SISI KLIEN (Peramban / Browser Korban).**  
+   Server web hanya bertindak sebagai media penyimpan atau pemantul (*reflector*). Kode JavaScript penyerang dieksekusi oleh mesin JavaScript peramban korban (V8 di Chrome atau SpiderMonkey di Firefox).
+4. **Target Serangan:**
+   Sesi autentikasi korban, cookie sesi rahasia (`PHPSESSID`), token penyimpanan lokal (*LocalStorage / SessionStorage*), kredensial login, dan antarmuka visual peramban (*DOM Defacement*).
+5. **Tiga Varian Utama XSS:**
+   * **Reflected XSS (Non-Persistent):** Skrip jahat disuntikkan via link URL query parameter dan langsung dipantulkan kembali oleh server dalam satu siklus request-response (contoh: video dosen `XSS.mkv`).
+   * **Stored XSS (Persistent):** Skrip jahat disimpan secara permanen di database server (misal kolom komentar buku tamu / forum), dan akan mengeksekusi di peramban setiap orang yang membuka halaman tersebut.
+   * **DOM-Based XSS:** Kerentanan terjadi murni di sisi script JavaScript klien yang memproses data dari sumber yang tidak aman (*source* seperti `document.location`) dan menuliskannya ke objek DOM berbahaya (*sink* seperti `document.write` atau `element.innerHTML`) tanpa menyentuh backend server.
+
+---
+
+### C. Cross-Site Request Forgery (CSRF / XSRF) - Konsep, Lokasi Eksekusi, dan Dampak
+
+1. **Definisi:**
+   Serangan di mana penyerang memperdaya atau memanipulasi peramban korban yang sedang dalam keadaan terautentikasi (memiliki sesi login aktif di sebuah situs) untuk mengirimkan permintaan HTTP berbahaya (*unauthorized request*) ke situs tersebut tanpa disadari atau dikehendaki oleh korban.
+2. **Akar Masalah (*Root Cause*):**
+   Aplikasi web **sepenuhnya mempercayai peramban korban** hanya berdasarkan kehadiran cookie sesi (`Cookie: PHPSESSID=...`). Peramban secara otomatis melampirkan cookie sesi pada setiap request yang mengarah ke domain sasaran, bahkan jika request tersebut dipicu oleh situs pihak ketiga yang jahat.
+   * *Syarat Mutlak Berfungsinya CSRF:*
+     1. Korban harus sedang memiliki sesi login aktif di aplikasi target.
+     2. Permintaan perubahan data (seperti ganti password) tidak memiliki validasi parameter rahasia yang tidak dapat ditebak (*Anti-CSRF Token*).
+3. **Lokasi Eksekusi (*Execution Environment*):**
+   **SISI KLIEN MEMICU AKSI KE SISI SERVER.**  
+   Peramban korban dieksploitasi sebagai "senjata perantara (*confused deputy*)" untuk mengirimkan request pengubahan data yang sah di mata server target.
+4. **Target Serangan:**
+   Fungsi dan logika bisnis aplikasi web yang mengubah status (*state-changing requests*): mengganti kata sandi akun, mengubah alamat email pemulihan, mentransfer dana perbankan, atau memodifikasi izin administratif.
+5. **Dampak terhadap Triad CIA:**
+   * **Integrity (Integritas):** Rusak parah (status akun atau data korban diubah paksa atas nama korban tanpa persetujuannya).
+   * *Catatan Penting:* CSRF standar **tidak dapat membaca respon data server** (*blind attack*) akibat kebijakan *Same-Origin Policy (SOP)* peramban, sehingga CSRF murni berfokus pada perusakan integritas data, bukan pencurian data.
+
+---
+
+### D. Tabel Matriks Perbandingan Pembeda Utama (SQLi vs XSS vs CSRF)
+
+| Parameter Komparasi | SQL Injection (SQLi) | Cross-Site Scripting (XSS) | Cross-Site Request Forgery (CSRF) |
+|---|---|---|---|
+| **Lokasi Eksekusi Kode** | **Sisi Server** (Database Engine) | **Sisi Klien** (Peramban Korban) | **Sisi Klien menembak Server Target** |
+| **Siapa Korban Utamanya?** | **Server / Basis Data Organisasi** | **Pengguna Lain / Klien Peramban** | **Integritas Akun Pengguna Terautentikasi** |
+| **Prinsip Kepercayaan yang Dilanggar** | Server mempercayai input mentah pengguna sebagai perintah SQL. | Peramban mempercayai seluruh skrip yang dikirimkan oleh server web. | Server mempercayai request pengguna hanya berdasarkan cookie sesi otomatis. |
+| **Bahasa Payload** | Sintaks SQL (`SELECT`, `UNION`, `' OR '1'='1`) | Sintaks HTML / JavaScript (`<script>`, `onerror=`) | HTTP Request Manipulation (`<img>`, `<form>`, link jebakan) |
+| **Kemampuan Membaca Data** | **BISA** (Membocorkan isi database langsung). | **BISA** (Mencuri cookie sesi dan token DOM). | **TIDAK BISA** (Hanya mengirim aksi perubahan status / *Blind Action*). |
+| **Kebutuhan Sesi Login** | **TIDAK PERLU** (Bisa diserang secara anonim). | **TIDAK PERLU** (Bisa disuntikkan secara anonim). | **WAJIB LOGIN** (Hanya berhasil jika korban sedang terautentikasi). |
+| **Target Celah di DVWA** | Form pencarian ID (`/vulnerabilities/sqli/`) | Form input nama (`/vulnerabilities/xss_r/`) | Form ganti password (`/vulnerabilities/csrf/`) |
+
+---
+
+### E. Analisis Eksploitasi Berantai (Chained Attack XSS ke CSRF pada Video Dosen)
+
+Dalam materi video dosen `CSRF.mkv`, dosen mendemonstrasikan bahwa pada tingkat keamanan **High**, aplikasi web DVWA memasang proteksi **Anti-CSRF Token (`user_token`)** pada form pergantian kata sandi.  
+Token ini dibuat secara dinamis di server dan diselipkan di dalam kode HTML, sehingga penyerang dari luar tidak dapat menebak nilainya untuk melancarkan serangan CSRF biasa.
+
+#### Bagaimana Dosen Menembusnya? (*Exploit Chaining*):
+Dosen menggabungkan dua kerentanan secara berurutan:
+
+```text
+[Attacker Link]
+      │
+      ▼
+1. Celah DOM XSS (/vulnerabilities/xss_d/)
+      │ (Eksekusi script eksternal: exp.js di browser korban)
+      ▼
+2. Skrip exp.js membaca memori DOM halaman (/vulnerabilities/csrf/)
+      │ (Mencuri nilai rahasia: user_token milik admin secara legal)
+      ▼
+3. Skrip exp.js memicu request pergantian password
+      │ (GET /vulnerabilities/csrf/?password_new=admin123&user_token=[TOKEN_CURIAN])
+      ▼
+4. Server DVWA memverifikasi token -> Status 200 OK -> Password Berhasil Diubah!
+```
+* **Kesimpulan Analitis:** Kerentanan XSS dapat digunakan sebagai jembatan pembuka (*enabler*) untuk meruntuhkan pertahanan anti-CSRF token yang paling ketat sekalipun.
+
+---
+
+### F. Strategi Pertahanan & Mitigasi Resmi Masing-Masing Kerentanan
+
+Jika dosen bertanya: *"Bagaimana cara developer memperbaiki source code agar kebal dari masing-masing serangan tersebut?"*
+
+1. **Mitigasi Mutlak SQL Injection:**
+   * **Gunakan *Prepared Statements / Parameterized Queries*:** Memisahkan secara tegas antara struktur instruksi SQL dan nilai data masukan (menggunakan pustaka PDO atau MySQLi bind_param).
+     ```php
+     $stmt = $pdo->prepare('SELECT first_name, last_name FROM users WHERE user_id = :id');
+     $stmt->execute(['id' => $id]);
+     ```
+   * Terapkan prinsip hak akses terendah (*Least Privilege*) pada akun pengguna database.
+
+2. **Mitigasi Mutlak Cross-Site Scripting (XSS):**
+   * **Gunakan *Context-Aware Output Encoding*:** Seluruh data yang berasal dari pengguna wajib diubah karakter khususnya sebelum dicetak ke layar peramban.
+     ```php
+     echo '<pre>Hello ' . htmlspecialchars($_GET['name'], ENT_QUOTES, 'UTF-8') . '</pre>';
+     ```
+   * Pasang header keamanan HTTP **`Content-Security-Policy (CSP)`** untuk membatasi domain asal skrip JavaScript yang diizinkan dieksekusi.
+   * Pasang atribut **`HttpOnly`** pada cookie sesi agar cookie tidak bisa dibaca oleh JavaScript via `document.cookie`.
+
+3. **Mitigasi Mutlak Cross-Site Request Forgery (CSRF):**
+   * **Terapkan *Anti-CSRF Token (Synchronizer Token Pattern)*:** Setiap formulir perubahan data wajib menyertakan token acak kriptografis yang diverifikasi keabsahannya oleh server sebelum memproses request.
+   * **Gunakan Atribut Cookie `SameSite`:** Setel bendera cookie sesi menjadi `SameSite=Strict` atau `SameSite=Lax` agar peramban menolak mengirimkan cookie sesi secara otomatis pada request yang berasal dari domain pihak ketiga.
+   * **Wajibkan Re-Autentikasi (Password Lama):** Untuk tindakan sensitif (seperti ganti password atau ubah nomor rekening), wajibkan pengguna memasukkan kembali kata sandi lama mereka.
