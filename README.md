@@ -42,7 +42,8 @@
    - [C. Solusi Layer 2: Deteksi via DNS Query Port 53 (Sebelum Koneksi Terbentuk)](#c-solusi-layer-2-deteksi-via-dns-query-port-53-sebelum-koneksi-terbentuk)
    - [D. Solusi Layer 3: Deteksi via HTTP Host Header Port 80](#d-solusi-layer-3-deteksi-via-http-host-header-port-80)
    - [E. Aturan Mode IPS: Pemblokiran Akses Media Sosial (Action Drop)](#e-aturan-mode-ips-pemblokiran-akses-media-sosial-action-drop)
-   - [F. Cara Uji Coba Cepat & Pembuktian di Terminal](#f-cara-uji-coba-cepat--pembuktian-di-terminal)
+   - [F. Mengapa Mengetik "facebook.com" di Firefox Kali Linux Tidak Menghasilkan Alert?](#f-mengapa-mengetik-facebookcom-di-firefox-kali-linux-tidak-menghasilkan-alert)
+   - [G. Dua Cara Praktik Menguji Rule Facebook di Lab (100% Berhasil)](#g-dua-cara-praktik-menguji-rule-facebook-di-lab-100-berhasil)
 
 > **Materi Khusus Footprinting & OSINT:** Dokumentasi lengkap mengenai instalasi, konfigurasi 3 filter, analisis SQLite `spiderfoot.db`, dan perbandingan temuan SpiderFoot v4.0.0 dipisahkan ke dalam folder khusus: [SPIDERFOOT/README.md](SPIDERFOOT/README.md).
 
@@ -1265,25 +1266,25 @@ Jika pengguna mencoba mengetik alamat tanpa HTTPS (misal mengetik `http://facebo
 Suricata dapat mendeteksi header `Host:` menggunakan sticky buffer **`http.host`**:
 
 ```text
-alert http $HOME_NET any -> $EXTERNAL_NET 80 (msg:"[POLICY VIOLATION] Akses HTTP Polos ke Facebook Terdeteksi"; flow:established,to_server; http.host; content:"facebook.com"; classtype:policy-violation; sid:1000045; rev:2;)
+alert http any any -> any 80 (msg:"[POLICY VIOLATION] Akses HTTP Polos ke Facebook Terdeteksi"; flow:established,to_server; http.host; content:"facebook.com"; classtype:policy-violation; sid:1000045; rev:3;)
 ```
 * **Bedah Kata per Kata:**
-  * **`alert`**: Aksi Mode IDS, catat insiden ke log.
+  * **`alert`**: Aksi Mode IDS, catat insiden ke log tanpa memutus koneksi peramban.
   * **`http`**: Parser protokol lapisan aplikasi HTTP Suricata.
-  * **`$HOME_NET`** (Source IP): Komputer pengguna lokal yang mengakses web polos tanpa enkripsi.
-  * **`any`** (Source Port): Port klien peramban yang dinamis.
-  * **`->`** (*Direction Operator*): Arah paket keluar dari pengguna lokal menuju server web.
-  * **`$EXTERNAL_NET`** (Destination IP): Server web Facebook di internet publik.
+  * **`any`** (Source IP): Alamat IP penyerang/penguji dari mana saja (mendukung IP Kali Linux `192.168.2.2`).
+  * **`any`** (Source Port): Nomor port klien peramban yang dinamis.
+  * **`->`** (*Direction Operator*): Arah paket satu arah menuju ke server.
+  * **`any`** (Destination IP): Alamat IP tujuan mana saja (mendukung IP server Ubuntu `192.168.2.3`). Menggunakan `any -> any` sangat penting pada lab VirtualBox karena Ubuntu bukan gateway router Kali Linux.
   * **`80`** (Destination Port): Nomor port standar protokol web HTTP polos.
   * **`msg:"[POLICY VIOLATION] Akses HTTP Polos ke Facebook Terdeteksi"`**: Pesan peringatan alert di file log.
   * **`flow:established,to_server;`**:
     * `established`: Memastikan sesi TCP telah terjalin melalui Three-Way Handshake.
-    * `to_server`: Memeriksa hanya paket request yang mengalir menuju server luar.
+    * `to_server`: Memeriksa hanya paket request yang mengalir menuju server.
   * **`http.host;`**: *Sticky buffer*. Mengarahkan pencarian string khusus pada baris header `Host:` di dalam paket HTTP request (misal: `Host: facebook.com`).
   * **`content:"facebook.com";`**: Nama domain host yang dituju dalam huruf kecil murni. *(Catatan Suricata 7.x: Jangan menambahkan `nocase;` pada buffer `http.host` karena buffer hostname sudah dinormalisasi otomatis ke huruf kecil oleh engine. Menambahkan `nocase;` akan ditolak oleh parser Suricata 7 sebagai galat error parsing signature)*.
-  * **`classtype:policy-violation;`**: Klasifikasi pelanggaran kebijakan jaringan.
+  * **`classtype:policy-violation;`**: Klasifikasi pelanggaran kebijakan jaringan internal.
   * **`sid:1000045;`**: Signature ID unik 1000045.
-  * **`rev:2;`**: Revisi ke-2 (revisi penghapusan keyword redundan `nocase;` untuk kompatibilitas penuh Suricata 7.x).
+  * **`rev:3;`**: Revisi ke-3 (revisi penggunaan `any -> any` untuk kompatibilitas topologi lab VirtualBox).
 ---
 
 ### E. Aturan Mode IPS: Pemblokiran Akses Media Sosial (Action Drop)
@@ -1315,38 +1316,56 @@ drop tls $HOME_NET any -> $EXTERNAL_NET 443 (msg:"[BLOCKED] Akses ke Instagram D
   > *"Secure Connection Failed / The connection has timed out"*
 ---
 
-### F. Cara Uji Coba Cepat & Pembuktian di Terminal
+### F. Mengapa Mengetik "facebook.com" di Firefox Kali Linux Tidak Menghasilkan Alert?
 
-1. Masukkan rule TLS dan DNS di atas ke dalam `/etc/suricata/rules/local.rules` di VM Ubuntu.
+Ketika kamu membuka Firefox di Kali Linux lalu mengetik `facebook.com`, alert **tidak akan pernah muncul** di Ubuntu jika kamu belum memahami konsep perutean jaringan (*network routing*):
+
+#### Dua Penyebab Teknisnya:
+1. **Perutean Interface VirtualBox (Bypass Jaringan):**
+   * Kali Linux memiliki 2 adapter: Adapter 1 (NAT / Internet) dan Adapter 2 (Host-Only `192.168.2.x`).
+   * Saat kamu membuka `facebook.com` di Firefox, sistem operasi Kali Linux merutekan paket tersebut keluar melalui **Adapter 1 (NAT) langsung ke internet publik asli**.
+   * Paket tersebut **SAMA SEKALI TIDAK MELEWATI** kabel jaringan virtual `enp0s8` milik Ubuntu tempat Suricata menyadap! Suricata pada Ubuntu menerima nol byte paket.
+2. **Perbedaan Arah Header Rule (`$HOME_NET` vs `$EXTERNAL_NET`):**
+   * Pada rule enterprise: `$HOME_NET any -> $EXTERNAL_NET 80` dirancang untuk Suricata yang dipasang pada Router/Gateway perusahaan (di mana seluruh trafik karyawan internal wajib menyeberang router untuk menuju internet).
+   * Pada lab VirtualBox, Ubuntu bukanlah router gateway Kali Linux. Jika Kali mengirim paket ke Ubuntu (`192.168.2.2 -> 192.168.2.3`), Kali adalah Source dan Ubuntu adalah Destination. Maka header rule wajib menggunakan `any any -> any 80`.
+
+---
+
+### G. Dua Cara Praktik Menguji Rule Facebook di Lab (100% Berhasil)
+
+#### Cara 1: Menggunakan cURL dengan Header Host Palsu (Paling Cepat & Elegan)
+Di terminal Kali Linux, tembakkan request langsung ke IP Ubuntu (`192.168.2.3`) namun sisipkan header `Host: facebook.com`:
+```bash
+curl -i -H "Host: facebook.com" http://192.168.2.3/
+```
+* **Bedah Perintah:**
+  * **`curl`**: Alat pengirim paket HTTP CLI.
+  * **`-i`**: Menampilkan response header server.
+  * **`-H "Host: facebook.com"`**: Menyuntikkan baris header HTTP kustom `Host: facebook.com` ke dalam paket request.
+  * **`http://192.168.2.3/`**: Mengarahkan paket melewati kartu jaringan `enp0s8` langsung ke server Ubuntu tempat Suricata menyadap.
+* **Hasil di Terminal Ubuntu:**
+  Suricata membaca buffer `http.host`, menemukan string `facebook.com`, dan seketika mencetak alert di `fast.log`:
+  ```text
+  [**] [1:1000045:3] [POLICY VIOLATION] Akses HTTP Polos ke Facebook Terdeteksi [**] [Priority: 1] {TCP} 192.168.2.2:xxxx -> 192.168.2.3:80
+  ```
+
+#### Cara 2: Membelokkan DNS Facebook ke IP Ubuntu via `/etc/hosts` di Kali Linux
+Jika ingin membuktikan secara visual langsung menggunakan peramban **Mozilla Firefox** di Kali Linux:
+
+1. Di terminal Kali Linux, buka berkas pemetaan domain lokal:
    ```bash
-   sudo suricatasc -c reload-rules
+   sudo nano /etc/hosts
    ```
-   * **`sudo`**: Hak akses root.
-   * **`suricatasc`**: Utilitas client soket Suricata.
-   * **`-c`**: Flag instruksi perintah.
-   * **`reload-rules`**: Memuat ulang berkas rules ke memori kernel Suricata secara live.
-3. Pantau log alert live:
-   ```bash
-   sudo tail -f /var/log/suricata/fast.log
+2. Tambahkan satu baris di paling bawah:
+   ```text
+   192.168.2.3 facebook.com www.facebook.com
    ```
-   * **`sudo`**: Hak akses root.
-   * **`tail`**: Program pembaca baris akhir berkas teks.
-   * **`-f`**: Follow mode (mengunci layar terminal untuk menampilkan event alert secara live).
-   * **`/var/log/suricata/fast.log`**: Berkas log peringatan Suricata.
-4. Dari terminal mesin penguji (Kali Linux), jalankan simulasi permintaan domain:
-   * **Menguji Rule DNS (Port 53):**
-     ```bash
-     nslookup instagram.com
-     ```
-     * **`nslookup`** (*Name Server Lookup*): Utilitas CLI untuk menguji query resolusi alamat IP ke server DNS.
-     * **`instagram.com`**: Nama domain target yang ditanyakan ke DNS.
-     * *(Alert DNS `1000043` langsung muncul seketika di `fast.log`)*.
-   * **Menguji Rule TLS SNI (Port 443 HTTPS):**
-     ```bash
-     curl -I -k https://www.instagram.com
-     ```
-     * **`curl`** (*Client URL*): Program transfer data HTTP/HTTPS via CLI.
-     * **`-I`** (*Fetch Headers Only*): Hanya mengambil response header menggunakan metode HTTP HEAD.
-     * **`-k`** (*Insecure flag*): Mengabaikan validasi peringatan sertifikat SSL.
-     * **`https://www.instagram.com`**: URL target HTTPS port 443 yang memicu pengiriman paket TLS Client Hello ber-SNI `www.instagram.com`.
-     * *(Alert TLS SNI `1000040` langsung tercetak di `fast.log`)*.
+3. Simpan: `Ctrl + O` $\rightarrow$ `Enter` $\rightarrow$ `Ctrl + X`.
+4. Buka peramban Firefox di Kali Linux, ketik di bilah alamat:
+   ```text
+   http://facebook.com
+   ```
+   *(Wajib ketik dengan awalan `http://`, bukan `https://`)*.
+5. Firefox di Kali Linux akan menyelesaikan nama `facebook.com` ke IP `192.168.2.3` dan mengirimkan paket HTTP port 80 melewati kartu jaringan `enp0s8`.
+6. Periksa terminal Ubuntu (`sudo tail -f /var/log/suricata/fast.log`), alert `[1:1000045:3]` akan langsung terpicu seketika di layar!
+*(Setelah selesai demonstrasi, hapus kembali baris tersebut dari `/etc/hosts`)*.
