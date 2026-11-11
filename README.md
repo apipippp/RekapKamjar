@@ -19,11 +19,15 @@
    - [Rule A: SYN Flood (Bab V Modul - sid:1000001)](#rule-a-syn-flood-bab-v-modul---sid1000001)
    - [Rule B: ICMP Burst (Bab V Modul - sid:1000002)](#rule-b-icmp-burst-bab-v-modul---sid1000002)
    - [Rule C: UDP Burst Port 53 DNS (Bab V Modul - sid:1000003)](#rule-c-udp-burst-port-53-dns-bab-v-modul---sid1000003)
-   - [Rule 1: SQL Injection Tautology Bypass (sid:1000021)](#rule-1-sql-injection-tautology-bypass---sid1000021)
-   - [Rule 2: Reflected XSS Event Handler Bypass (sid:1000022)](#rule-2-reflected-xss-event-handler-bypass---sid1000022)
-   - [Rule 3: CSRF Unauthorized Password Change (sid:1000023)](#rule-3-csrf-unauthorized-password-change---sid1000023)
-   - [Rule 4: DoS TCP SYN Flood Port 80 DVWA (sid:1000024)](#rule-4-dos-tcp-syn-flood-port-80-dvwa---sid1000024)
-   - [Rule 5: Mode IPS - SQL Injection Dropped (sid:1000021 rev:5)](#rule-5-mode-ips---sql-injection-dropped---sid1000021-rev5)
+   - [Rule 1.A: SQL Injection Tautology Bypass (Video Dosen - sid:1000021)](#rule-1a-sql-injection-tautology-bypass-sid1000021)
+   - [Rule 1.B: SQL Injection UNION SELECT Operator (Bab IX Modul - sid:1000004)](#rule-1b-sql-injection-union-select-operator-bab-ix-modul---sid1000004)
+   - [Rule 1.C: SQL Injection Encoded Quote %27 (Bab IX Modul - sid:1000005)](#rule-1c-sql-injection-encoded-quote-27-bab-ix-modul---sid1000005)
+   - [Rule 1.D: SQL Injection DB Fingerprinting version() (Bab IX Modul - sid:1000006)](#rule-1d-sql-injection-db-fingerprinting-version-bab-ix-modul---sid1000006)
+   - [Rule 1.E: SQL Injection Time-Based Blind sleep() (Bab IX Modul - sid:1000007)](#rule-1e-sql-injection-time-based-blind-sleep-bab-ix-modul---sid1000007)
+   - [Rule 2: Reflected XSS Event Handler Bypass (sid:1000022)](#rule-2-reflected-xss-event-handler-bypass-sid1000022)
+   - [Rule 3: CSRF Unauthorized Password Change (sid:1000023)](#rule-3-csrf-unauthorized-password-change-sid1000023)
+   - [Rule 4: DoS TCP SYN Flood Port 80 DVWA (sid:1000024)](#rule-4-dos-tcp-syn-flood-port-80-dvwa-sid1000024)
+   - [Rule 5: Mode IPS - SQL Injection Dropped (sid:1000021 rev:5)](#rule-5-mode-ips---sql-injection-dropped-sid1000021-rev5)
 10. [Konseptual Arsitektur: Mode IDS vs Mode IPS](#10-konseptual-arsitektur-mode-ids-vs-mode-ips)
 11. [FAQ Ujian Lisan: Menjalankan Suricata Mode IDS vs Memantau Log (`tail -f`)](#11-faq-ujian-lisan-menjalankan-suricata-mode-ids-vs-memantau-log)
 12. [Panduan Lengkap Footprinting & OSINT: SpiderFoot v4.0.0](#12-panduan-lengkap-footprinting--osint-spiderfoot-v400)
@@ -115,6 +119,77 @@ curl -i -s "http://192.168.2.3/dvwa/vulnerabilities/sqli/?id=%27+OR+%271%27%3D%2
 * **`"..."`** (*Quoted Target URL*): String alamat URL tujuan yang membawa muatan eksploitasi (*payload*). Tanda petik ganda wajib dipasang agar karakter khusus peramban seperti `?`, `&`, `=`, dan `'` tidak diinterpretasikan salah oleh shell Linux.
 
 ---
+
+### F. Perekaman Jejak Paket Serangan Jaringan via tcpdump
+```bash
+sudo tcpdump -i eth0 -w synflood.pcap host 192.168.2.3 and port 80
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk mengaktifkan antarmuka kartu jaringan dalam mode sadap (*promiscuous mode*).
+* **`tcpdump`**: Program penganalisis paket jaringan CLI paling populer di Linux untuk menyadap (*sniffing*) dan merekam paket data yang melintas.
+* **`-i`** (*Interface flag*): Menentukan kartu jaringan yang disadap.
+* **`eth0`**: Nama kartu jaringan aktif di VM Kali Linux yang mengarah ke lab.
+* **`-w`** (*Write to file flag*): Memerintahkan `tcpdump` agar tidak mencetak teks paket mentah ke layar terminal, melainkan menyimpannya ke dalam berkas biner `.pcap`.
+* **`synflood.pcap`**: Nama berkas biner PCAP (*Packet Capture*) hasil rekaman yang nantinya bisa dibuka dan dianalisis di Wireshark.
+* **`host`** (*BPF Primitive keyword*): Filter sintaks *Berkeley Packet Filter (BPF)* untuk membatasi pencatatan hanya pada host tertentu.
+* **`192.168.2.3`**: Alamat IP host target yang disaring.
+* **`and`** (*BPF Logical Operator*): Operator logika DAN untuk menggabungkan dua kondisi filter.
+* **`port`** (*BPF Port Primitive keyword*): Filter pembatas nomor port.
+* **`80`**: Nilai port tujuan yang difilter (hanya merekam lalu lintas HTTP port 80).
+
+---
+
+### G. Perintah Serangan DoS Xmas Tree Flood via hping3
+```bash
+sudo hping3 -F -P -U --flood -p 80 192.168.2.3
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`hping3`**: Program generator paket TCP/IP kustom.
+* **`-F`** (*Set FIN Flag*): Mengaktifkan bendera **FIN** (*Finish*) pada header TCP.
+* **`-P`** (*Set PSH Flag*): Mengaktifkan bendera **PSH** (*Push*) pada header TCP.
+* **`-U`** (*Set URG Flag*): Mengaktifkan bendera **URG** (*Urgent*) pada header TCP.
+* **`--flood`** (*Flood mode*): Mengirimkan paket kombinasi FIN+PSH+URG secepat kapasitas bandwidth antarmuka tanpa jeda waktu. Disebut *Xmas Attack* karena kombinasi ketiga bendera yang menyala serentak dianalogikan seperti lampu pohon natal yang berkedip, membebani CPU kernel korban yang kebingungan memproses anomali state koneksi.
+* **`-p`** (*Destination Port Flag*): Saklar penunjuk nomor port.
+* **`80`**: Nomor port web server HTTP target.
+* **`192.168.2.3`**: Alamat IP server sasaran.
+
+---
+
+### H. Perintah Serangan DoS ICMP Flood via hping3
+```bash
+sudo hping3 --icmp --flood 192.168.2.3
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`hping3`**: Biner perakit paket data mentah.
+* **`--icmp`** (*ICMP Mode Flag*): Memerintahkan `hping3` untuk menyusun paket protokol ICMP (*Echo Request*), bukan paket TCP.
+* **`--flood`** (*Flood Mode*): Mengirimkan jutaan paket ping per detik tanpa jeda waktu dan tanpa menunggu balasan paket, menghabiskan alokasi bandwidth penerimaan (*bandwidth exhaustion*).
+* **`192.168.2.3`**: Alamat IP server korban yang dibanjiri ICMP ping.
+
+---
+
+### I. Perintah Serangan DoS UDP Flood ke Port 53 via hping3
+```bash
+sudo hping3 --udp --flood -p 53 192.168.2.3
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`hping3`**: Biner pembuat paket mentah.
+* **`--udp`** (*UDP Mode Flag*): Menyusun paket protokol transport UDP (*User Datagram Protocol*).
+* **`--flood`** (*Flood Mode*): Menembakkan paket UDP secepat mungkin tanpa menunggu balasan.
+* **`-p`** (*Destination Port Flag*): Saklar penunjuk port tujuan.
+* **`53`**: Port layanan DNS server target.
+* **`192.168.2.3`**: Alamat IP server tujuan.
+
+---
+
+### J. Perintah Eksploitasi SQL Injection Otomatis via Sqlmap
+```bash
+sqlmap -u "http://192.168.2.3/dvwa/vulnerabilities/sqli/?id=1&Submit=Submit#" --cookie="PHPSESSID=fl52qlkmsings5cjtagvaftpb4; security=low" --batch --dbs
+```
+* **`sqlmap`**: Alat penetrasi open-source otomatis untuk mendeteksi dan mengeksploitasi kerentanan SQL Injection serta mengambil alih database server.
+* **`-u`** (*Target URL Flag*): Menentukan alamat URL endpoint aplikasi web yang memiliki parameter rentan.
+* **`"..."`**: URL lengkap menuju modul SQLi DVWA beserta parameter yang akan diuji (`id=1`).
+* **`--cookie`** (*HTTP Cookie Header Flag*): Mengirimkan data cookie sesi peramban. Wajib disertakan karena aplikasi DVWA mengharuskan pengguna terautentikasi (membutuhkan nilai cookie sesi `PHPSESSID` dan tingkat keamanan `security=low`).
+* **`--batch`** (*Non-interactive Batch Mode*): Menginstruksikan `sqlmap` agar tidak pernah berhenti menanyakan pertanyaan konfirmasi kepada pengguna di terminal, melainkan otomatis memilih jawaban bawaan (*default answer*).
+* **`--dbs`** (*Enumerate Databases Flag*): Perintah DBMS footprinting untuk mengekstrak dan menampilkan seluruh daftar nama skema basis data (*databases*) yang ada di dalam server MariaDB/MySQL.
 
 ## 2. BEDAH LENGKAP PERINTAH TERMINAL VM 2 (UBUNTU SERVER - DEFENDER)
 
@@ -219,6 +294,58 @@ sudo suricata -c /etc/suricata/suricata.yaml -q 0 -v
 * **`-v`** (*Verbose flag*): Menampilkan log operasional secara mendalam ke layar terminal.
 
 ---
+
+### I. Pemasangan Repositori PPA Resmi Suricata (OISF Stable)
+```bash
+sudo add-apt-repository -y ppa:oisf/suricata-stable
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk menambahkan sumber repositori baru ke berkas konfigurasi sistem `/etc/apt/sources.list.d/`.
+* **`add-apt-repository`**: Program utilitas Linux untuk menambahkan repositori *Personal Package Archive (PPA)* pihak ketiga ke dalam sistem manajemen paket APT.
+* **`-y`** (*Automatic Yes flag*): Mengonfirmasi penambahan kunci autentikasi GPG repositori secara otomatis tanpa berhenti meminta konfirmasi tombol Enter.
+* **`ppa:oisf/suricata-stable`**: Alamat PPA resmi yang dikelola langsung oleh *Open Information Security Foundation (OISF)* penyedia paket rilis stabil terbaru Suricata.
+
+---
+
+### J. Pembaruan Signature Database Resmi via suricata-update
+```bash
+sudo suricata-update
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk menulis berkas signature ke direktori sistem `/var/lib/suricata/rules/`.
+* **`suricata-update`**: Program utilitas resmi bawaan Suricata untuk mengunduh, menggabungkan (*bundling*), dan memperbarui puluhan ribu aturan signature ancaman siber terbaru dari repositori komunitas *Emerging Threats (ET Open)*.
+
+---
+
+### K. Checklist Hardening Awal Firewall UFW (Bab 1 Modul Praktikum Hal. 10)
+```bash
+sudo ufw allow 22,80,443/tcp && sudo ufw enable
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk mengonfigurasi firewall host.
+* **`ufw`** (*Uncomplicated Firewall*): Antarmuka baris perintah yang menyederhanakan konfigurasi tabel firewall iptables di Ubuntu.
+* **`allow`**: Aturan izin yang memperbolehkan lalu lintas paket masuk (*ingress traffic*).
+* **`22,80,443/tcp`**: Daftar nomor port yang dibuka secara selektif khusus protokol TCP:
+  * Port `22`: Layanan remote administrasi SSH.
+  * Port `80`: Layanan web server HTTP DVWA.
+  * Port `443`: Layanan web server terenkripsi HTTPS.
+* **`&&`** (*Operator Logika AND*): Operator shell penjamin urutan eksekusi perintah berikutnya jika perintah pertama sukses.
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`ufw`**: Program firewall UFW.
+* **`enable`**: Mengaktifkan firewall UFW dan memasangnya agar otomatis menyala saat sistem dinyalakan (*booting*). Port lain di luar daftar di atas otomatis ditolak (*default deny policy*).
+
+---
+
+### L. Pencatatan Baseline Layanan Jaringan Aktif via ss (Bab 1 Modul Praktikum Hal. 10)
+```bash
+sudo ss -tulpn > baseline_services.txt
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk melihat nama proses dan PID seluruh program sistem.
+* **`ss`** (*Socket Statistics*): Utilitas modern pemeriksa soket jaringan Linux (pengganti utilitas lawas `netstat`).
+* **`-t`** (*TCP sockets flag*): Memfilter hanya soket protokol transport TCP.
+* **`-u`** (*UDP sockets flag*): Memfilter soket protokol transport UDP.
+* **`-l`** (*Listening sockets flag*): Hanya menampilkan soket yang berstatus mendengarkan (*LISTENING* / siap menerima koneksi masuk).
+* **`-p`** (*Process flag*): Menampilkan nama proses dan nomor PID aplikasi pemilik soket tersebut (misal `apache2`, `suricata`, `mariadbd`).
+* **`-n`** (*Numeric flag*): Menampilkan alamat IP dan nomor port dalam bentuk angka murni tanpa mencoba menerjemahkannya ke nama domain (mencegah lag resolusi DNS).
+* **`>`** (*Output Redirection Operator*): Mengarahkan keluaran teks hasil perintah dari layar terminal untuk ditulis dan disimpan ke dalam sebuah berkas teks baru.
+* **`baseline_services.txt`**: Nama berkas teks tempat menyimpan daftar layanan normal awal (*baseline*) sebagai pembanding forensik jika sistem disusupi di masa depan.
 
 ## 3. BEDAH PERINTAH INSTALASI NATIVE LAMP STACK & DVWA
 
@@ -584,7 +711,7 @@ alert udp any any -> $HOME_NET 53 (msg:"UDP BURST TO DNS PORT DETECTED"; thresho
 
 ---
 
-### Rule 1: SQL Injection Tautology Bypass (sid:1000021)
+### Rule 1.A: SQL Injection Tautology Bypass (sid:1000021)
 ```text
 alert http any any -> $HOME_NET 80 (msg:"[DVWA ATTACK] Terdeteksi Eksploitasi SQL Injection (Tautology Bypass)"; flow:established,to_server; http.uri; content:"/vulnerabilities/sqli/"; nocase; pcre:"/(%27|\')(\s+|\+|%20)or(\s+|\+|%20)/i"; classtype:web-application-attack; sid:1000021; rev:2;)
 ```
@@ -610,6 +737,100 @@ alert http any any -> $HOME_NET 80 (msg:"[DVWA ATTACK] Terdeteksi Eksploitasi SQ
 * **`classtype:web-application-attack;`**: Kategori serangan aplikasi web (otomatis memetakan ke tingkat keparahan **Priority 1 / High**).
 * **`sid:1000021;`**: Signature ID unik 1000021.
 * **`rev:2;`**: Nomor revisi ke-2 (revisi perbaikan penanganan tanda `+`).
+
+---
+
+### Rule 1.B: SQL Injection UNION SELECT Operator (Bab IX Modul - sid:1000004)
+```text
+alert http any any -> $HOME_NET 80 (msg:"SQL INJECTION ATTEMPT - UNION SELECT DETECTED"; flow:to_server,established; http.uri; content:"UNION"; nocase; http.uri; content:"SELECT"; nocase; distance:0; classtype:web-application-attack; sid:1000004; rev:1;)
+```
+* **`alert`**: Aksi Mode IDS, mencatat peringatan ke dalam `fast.log` tanpa memutus koneksi peramban.
+* **`http`**: Parser protokol lapisan aplikasi HTTP Suricata.
+* **`any` (Source IP)**: Alamat IP penyerang dari mana saja.
+* **`any` (Source Port)**: Port klien peramban pengirim dari nomor port acak berapa saja.
+* **`->`** (*Direction Operator*): Arah lalu lintas paket satu arah dari klien penyerang menuju server korban.
+* **`$HOME_NET`**: Alamat IP server web korban yang dilindungi (`192.168.2.3/32`).
+* **`80`**: Nomor port layanan web HTTP Apache target.
+* **`msg:"SQL INJECTION ATTEMPT - UNION SELECT DETECTED"`**: Teks pesan peringatan deskriptif yang dicetak ke `fast.log`.
+* **`flow:to_server,established;`**:
+  * `to_server`: Hanya memeriksa paket permintaan yang dikirim dari arah klien menuju server web.
+  * `established`: Memastikan koneksi TCP telah terjalin sah melalui Three-Way Handshake.
+* **`http.uri;`**: *Sticky buffer*. Mengarahkan pencarian muatan string hanya pada area pointer memori baris URL path dan parameter query.
+* **`content:"UNION";`**: Pola teks pertama yang dicari, mencocokkan kata kunci operator SQL `UNION`.
+* **`nocase;`**: Mengabaikan perbedaan huruf besar dan kecil untuk kata kunci `UNION`.
+* **`http.uri;`**: Menegaskan kembali sticky buffer untuk evaluasi pencocokan pola teks kedua.
+* **`content:"SELECT";`**: Pola teks kedua yang dicari, mencocokkan kata kunci operator SQL `SELECT`.
+* **`nocase;`**: Mengabaikan kapitalisasi huruf untuk kata kunci `SELECT`.
+* **`distance:0;`** (*Relative distance modifier*): Parameter krusial yang menentukan bahwa pencarian kata `SELECT` harus dimulai tepat dari posisi karakter terakhir kata `UNION` ditemukan (jarak offset 0 byte atau lebih di depannya). Mencegah salah deteksi jika kata `SELECT` muncul sebelum kata `UNION`.
+* **`classtype:web-application-attack;`**: Kategori serangan aplikasi web (otomatis memetakan ke tingkat keparahan **Priority 1 / High**).
+* **`sid:1000004;`**: Signature ID unik 1000004.
+* **`rev:1;`**: Nomor versi revisi rule ke-1.
+
+---
+
+### Rule 1.C: SQL Injection Encoded Quote %27 (Bab IX Modul - sid:1000005)
+```text
+alert http any any -> $HOME_NET 80 (msg:"SQL INJECTION ATTEMPT - Quote/Encoded Character Detected"; http.uri; content:"%27"; nocase; classtype:web-application-attack; sid:1000005; rev:1;)
+```
+* **`alert`**: Aksi Mode IDS, mencatat ke log tanpa membuang paket.
+* **`http`**: Parser protokol lapisan aplikasi HTTP Suricata.
+* **`any` (Source IP)**: Alamat IP penyerang dari mana saja.
+* **`any` (Source Port)**: Port pengirim klien penyerang.
+* **`->`** (*Direction Operator*): Arah paket satu arah dari penyerang ke server.
+* **`$HOME_NET`**: Alamat IP server web target yang dilindungi (`192.168.2.3/32`).
+* **`80`**: Nomor port layanan web HTTP target.
+* **`msg:"SQL INJECTION ATTEMPT - Quote/Encoded Character Detected"`**: Teks pesan peringatan di file log.
+* **`http.uri;`**: *Sticky buffer*. Mengarahkan pencarian string secara spesifik hanya pada buffer URL.
+* **`content:"%27";`**: Pola teks yang dicari, mencocokkan representasi URL Encoding dari karakter kutip tunggal (`'`). Karakter ini adalah indikator awal bahwa penyerang mencoba merusak pembungkus string kueri SQL asli.
+* **`nocase;`**: Mengabaikan perbedaan huruf kapital (misal `%27` atau `%2F`).
+* **`classtype:web-application-attack;`**: Kategori serangan aplikasi web (Priority 1).
+* **`sid:1000005;`**: Signature ID unik 1000005.
+* **`rev:1;`**: Nomor revisi ke-1.
+
+---
+
+### Rule 1.D: SQL Injection DB Fingerprinting version() (Bab IX Modul - sid:1000006)
+```text
+alert http any any -> $HOME_NET 80 (msg:"SQL INJECTION ATTEMPT - DB Fingerprinting Function Detected"; http.uri; content:"version("; nocase; classtype:web-application-attack; sid:1000006; rev:1;)
+```
+* **`alert`**: Aksi Mode IDS, mencatat insiden ke log.
+* **`http`**: Protokol aplikasi web HTTP.
+* **`any` (Source IP)**: Alamat IP penyerang dari mana saja.
+* **`any` (Source Port)**: Port klien penyerang.
+* **`->`** (*Direction Operator*): Arah aliran paket menuju server.
+* **`$HOME_NET`**: Alamat IP server web target.
+* **`80`**: Port layanan web HTTP target.
+* **`msg:"SQL INJECTION ATTEMPT - DB Fingerprinting Function Detected"`**: Pesan alert di log.
+* **`http.uri;`**: *Sticky buffer* penunjuk area URL string.
+* **`content:"version(";`**: Pola teks yang mencocokkan fungsi bawaan MySQL/MariaDB `version()`. Fungsi ini digunakan penyerang untuk memetakan versi database guna mencari eksploitasi CVE lanjutan.
+* **`nocase;`**: Case-insensitive untuk parameter content.
+* **`classtype:web-application-attack;`**: Kategori serangan web (Priority 1).
+* **`sid:1000006;`**: Signature ID unik 1000006.
+* **`rev:1;`**: Nomor revisi ke-1.
+
+---
+
+### Rule 1.E: SQL Injection Time-Based Blind sleep() (Bab IX Modul - sid:1000007)
+```text
+alert http any any -> $HOME_NET 80 (msg:"SQL INJECTION ATTEMPT - Time-Based Blind sleep() Detected"; flow:to_server,established; http.uri; content:"sleep("; nocase; classtype:web-application-attack; sid:1000007; rev:1;)
+```
+* **`alert`**: Aksi Mode IDS, catat insiden ke log tanpa memutus koneksi.
+* **`http`**: Protokol lapisan aplikasi web HTTP.
+* **`any` (Source IP)**: Alamat IP penyerang dari mana saja.
+* **`any` (Source Port)**: Port acak klien penyerang.
+* **`->`** (*Direction Operator*): Arah paket dari penyerang ke server.
+* **`$HOME_NET`**: Alamat IP server web target yang dilindungi.
+* **`80`**: Nomor port layanan web HTTP target.
+* **`msg:"SQL INJECTION ATTEMPT - Time-Based Blind sleep() Detected"`**: Teks pesan peringatan di file log.
+* **`flow:to_server,established;`**:
+  * `to_server`: Memeriksa hanya paket permintaan yang mengalir menuju server.
+  * `established`: Memastikan jabat tangan TCP Three-Way Handshake telah selesai.
+* **`http.uri;`**: *Sticky buffer* inspeksi pada baris URL.
+* **`content:"sleep(";`**: Pola teks yang mencocokkan fungsi penunda waktu MySQL `sleep()`. Fungsi ini disuntikkan penyerang pada teknik *Time-Based Blind SQLi* untuk mengekstrak data huruf-demi-huruf dengan mengukur jeda waktu respons web server.
+* **`nocase;`**: Mengabaikan kapitalisasi huruf pada parameter content.
+* **`classtype:web-application-attack;`**: Kategori serangan web (Priority 1).
+* **`sid:1000007;`**: Signature ID unik 1000007.
+* **`rev:1;`**: Nomor revisi ke-1.
 
 ---
 
