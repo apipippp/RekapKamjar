@@ -2,19 +2,20 @@
 **Materi:** IDS/IPS Suricata, Web Application Security (DVWA), & Attack Simulation  
 **Penulis:** Afif Nur Rahman (H1H024016)  
 **Target Lab:** Universitas Jenderal Soedirman  
+**Catatan Penting:** Seluruh penjelasan perintah dan rules pada dokumen ini bersifat **100% mandiri (self-contained)**. Setiap perintah dan setiap baris rule menyajikan bedah kata-per-kata secara utuh tanpa ada parameter yang dilewati atau disingkat.
 
 ---
 
 ## DAFTAR ISI
-1. [Bedah Perintah Terminal VM 1 (Kali Linux - Attacker) Kata per Kata](#1-bedah-perintah-terminal-vm-1-kali-linux---attacker)
-2. [Bedah Perintah Terminal VM 2 (Ubuntu Server - Defender) Kata per Kata](#2-bedah-perintah-terminal-vm-2-ubuntu-server---defender)
-3. [Bedah Total Komponen Rules Suricata (Header & Options)](#3-bedah-total-komponen-rules-suricata)
-4. [Bedah Mendalam Encoding URL & Karakter Heksadesimal (%20, %27, dll)](#4-bedah-mendalam-encoding-url--karakter-heksadesimal)
+1. [Bedah Lengkap Perintah Terminal VM 1 (Kali Linux - Attacker) Kata per Kata](#1-bedah-lengkap-perintah-terminal-vm-1-kali-linux---attacker)
+2. [Bedah Lengkap Perintah Terminal VM 2 (Ubuntu Server - Defender) Kata per Kata](#2-bedah-lengkap-perintah-terminal-vm-2-ubuntu-server---defender)
+3. [Bedah Perintah Instalasi Native LAMP Stack & DVWA Kata per Kata](#3-bedah-perintah-instalasi-native-lamp-stack--dvwa)
+4. [Bedah Mendalam Encoding URL & Karakter Heksadesimal (%20, %27, %23, %3D, dll)](#4-bedah-mendalam-encoding-url--karakter-heksadesimal)
 5. [Bedah Mendalam Sintaks Regex PCRE (Perl-Compatible Regular Expressions)](#5-bedah-mendalam-sintaks-regex-pcre)
-6. [Bedah Mendalam TCP Flags & Masking Bit ECN (flags:S,12;)](#6-bedah-mendalam-tcp-flags--masking-bit-ecn)
+6. [Bedah Mendalam TCP Flags & Masking Bit ECN (flags:S,12; dan flags:S;)](#6-bedah-mendalam-tcp-flags--masking-bit-ecn)
 7. [Bedah Mendalam Sticky Buffer & Engine Preprocessor Suricata](#7-bedah-mendalam-sticky-buffer--engine-preprocessor-suricata)
 8. [Bedah Mendalam Mesin Laju Trafik (Thresholding)](#8-bedah-mendalam-mesin-laju-trafik-thresholding)
-9. [Bedah Seluruh Baris Rules Praktikum Kata per Kata](#9-bedah-seluruh-baris-rules-praktikum)
+9. [Bedah Seluruh Baris Rules Praktikum Kata per Kata (Tanpa Opsi Dilewati)](#9-bedah-seluruh-baris-rules-praktikum)
    - [Rule A: SYN Flood (Bab V Modul - sid:1000001)](#rule-a-syn-flood-bab-v-modul---sid1000001)
    - [Rule B: ICMP Burst (Bab V Modul - sid:1000002)](#rule-b-icmp-burst-bab-v-modul---sid1000002)
    - [Rule C: UDP Burst Port 53 DNS (Bab V Modul - sid:1000003)](#rule-c-udp-burst-port-53-dns-bab-v-modul---sid1000003)
@@ -27,140 +28,294 @@
 
 ---
 
-## 1. BEDAH PERINTAH TERMINAL VM 1 (KALI LINUX - ATTACKER)
+## 1. BEDAH LENGKAP PERINTAH TERMINAL VM 1 (KALI LINUX - ATTACKER)
+
+---
 
 ### A. Perintah DoS TCP SYN Flood Terukur
 ```bash
 sudo hping3 -S -p 80 -c 50 --faster 192.168.2.3
 ```
-* **`sudo`** (*SuperUser DO*): Menjalankan perintah dengan hak akses root/administrator tertinggi. Wajib digunakan karena pembuatan paket mentah (*raw socket creation*) dan manipulasi flag TCP secara manual dilarang untuk user Linux biasa tanpa izin kernel.
-* **`hping3`**: Program generator dan penganalisis paket jaringan berbasis CLI yang mampu menyusun paket IP, TCP, UDP, dan ICMP kustom.
-* **`-S`** (*SYN Flag*): Mengaktifkan secara spesifik bendera TCP **SYN** (*Synchronize*), yaitu paket inisiasi koneksi pada *TCP Three-Way Handshake*.
-* **`-p 80`** (*Port destination*): Mengarahkan paket serangan tepat ke port 80 (port layanan web HTTP Apache / DVWA).
-* **`-c 50`** (*Count 50*): Membatasi jumlah paket yang dikirimkan tepat sebanyak 50 paket, lalu proses berhenti otomatis. Ini mencegah server hang total dan menjaga lab tetap terkendali.
-* **`--faster`** (*Fast rate*): Mengatur kecepatan pengiriman paket dengan interval 10 milidetik (10.000 mikrodetik), atau setara dengan **100 paket per detik**. Laju ini menjamin ambang batas Suricata terlampaui seketika.
-* **`192.168.2.3`**: Alamat IP mesin target/korban (VM Ubuntu Server).
+* **`sudo`** (*SuperUser DO*): Menjalankan perintah dengan hak akses root/administrator tertinggi sistem Linux. Pembuatan soket mentah (*raw socket*) dan perakitan header TCP kustom di tingkat kernel mewajibkan hak akses root.
+* **`hping3`**: Program generator dan penganalisis paket jaringan berbasis CLI yang mampu merakit paket IP, TCP, UDP, dan ICMP secara fleksibel.
+* **`-S`** (*SYN Flag*): Mengaktifkan secara spesifik bendera kontrol TCP **SYN** (*Synchronize*), yaitu jenis paket inisiasi jabat tangan koneksi baru pada *TCP Three-Way Handshake*.
+* **`-p`** (*Destination Port Flag*): Opsi saklar untuk menentukan nomor port tujuan serangan.
+* **`80`**: Nilai port tujuan yang diserang, yaitu port standar layanan HTTP tempat web server DVWA berjalan.
+* **`-c`** (*Count Flag*): Opsi saklar untuk membatasi jumlah total paket yang dikirimkan.
+* **`50`**: Nilai jumlah paket. Mengirimkan tepat 50 paket lalu perintah otomatis berhenti agar server target tidak crash permanen.
+* **`--faster`** (*Fast transmission rate*): Parameter pengatur kecepatan pengiriman paket. Mengatur interval kirim menjadi 10 milidetik (10.000 mikrodetik), yang setara dengan **100 paket per detik**.
+* **`192.168.2.3`**: Alamat IPv4 tujuan (VM 2 Ubuntu Server sebagai sasaran serangan).
 
-### B. Perintah DoS Mode Flood Ekstrem
+---
+
+### B. Perintah DoS TCP SYN Flood Mode Ekstrem
 ```bash
 sudo hping3 -S -p 80 --flood 192.168.2.3
 ```
-* **`--flood`**: Mengirimkan paket secepat mungkin (*as fast as possible*) sesuai kapasitas maksimal bandwidth kartu jaringan tanpa memproses atau mendengarkan paket balasan (*no reply processing*).
-  * *Konsekuensi teknis:* I/O buffer terminal Kali Linux terisi penuh hingga ratusan ribu event/detik, menyebabkan tombol jeda `Ctrl + Z` tersendat di antrean CPU.
+* **`sudo`** (*SuperUser DO*): Menjalankan utilitas dengan hak istimewa administrator tertinggi kernel Linux.
+* **`hping3`**: Program perakit dan pengirim paket TCP/IP kustom.
+* **`-S`** (*SYN Flag*): Menyetel bendera TCP SYN aktif (bernilai 1) pada setiap paket yang keluar.
+* **`-p`** (*Destination Port Flag*): Parameter pemilih nomor port tujuan.
+* **`80`**: Nomor port layanan web HTTP target.
+* **`--flood`** (*Flood Mode*): Mode transmisi paling agresif. Memerintahkan `hping3` mengirimkan paket secepat mungkin sesuai kapasitas maksimal bandwidth antarmuka jaringan tanpa menunggu balasan paket dan tanpa mencetak log balasan ke layar (*no reply processing*).
+* **`192.168.2.3`**: Alamat IPv4 server target yang dibanjiri paket.
+
+---
 
 ### C. Perintah Menghentikan Paksa Proses Macet
 ```bash
 sudo killall -9 hping3
 ```
-* **`killall`**: Utilitas untuk mengirimkan sinyal penghentian ke seluruh proses berdasarkan nama aplikasinya.
-* **`-9`** (*SIGKILL*): Sinyal pemusnahan mutlak pada kernel Linux. Sinyal ini tidak bisa diabaikan, ditunda, atau ditahan oleh aplikasi yang sedang hang/macet.
-* **`hping3`**: Nama target proses yang dimatikan.
-
-### D. Perintah Pengujian ICMP Ping
-```bash
-ping -c 3 192.168.2.3
-```
-* **`ping`**: Utilitas penguji konektivitas jaringan berbasis protokol ICMP.
-* **`-c 3`** (*Count 3*): Mengirimkan tepat 3 paket *ICMP Echo Request*.
-* **`192.168.2.3`**: Alamat IP target.
-
-### E. Perintah Eksploitasi Web via CLI
-```bash
-curl -i -s "http://192.168.2.3/dvwa/vulnerabilities/sqli/?id=%27+OR+%271%27%3D%271&Submit=Submit"
-```
-* **`curl`** (*Client URL*): Alat CLI untuk mentransfer data melalui protokol HTTP/HTTPS.
-* **`-i`** (*Include Headers*): Menampilkan response header HTTP dari server (`HTTP/1.1 200 OK`, `Set-Cookie`, `Server: Apache`) bersamaan dengan body HTML.
-* **`-s`** (*Silent*): Menyembunyikan progress meter agar tampilan terminal bersih.
-* **`"..."`**: URL endpoint yang disisipi payload. Tanda petik dua wajib dipasang agar karakter `&`, `?`, `=`, `'` tidak dieksekusi sebagai operator shell Linux.
+* **`sudo`** (*SuperUser DO*): Memberikan wewenang root untuk mengirimkan sinyal penghentian proses tingkat sistem.
+* **`killall`**: Program Linux untuk mengirimkan sinyal terminasi ke semua proses yang berjalan berdasarkan nama programnya (bukan berdasarkan nomor PID).
+* **`-9`** (*SIGKILL Signal*): Sinyal pembunuhan mutlak pada kernel Linux. Sinyal nomor 9 tidak dapat ditangkap (*unblockable*), tidak dapat ditunda, dan tidak dapat diabaikan oleh program yang sedang macet di memori.
+* **`hping3`**: Nama program target yang dihentikan paksa.
 
 ---
 
-## 2. BEDAH PERINTAH TERMINAL VM 2 (UBUNTU SERVER - DEFENDER)
+### D. Perintah Pengujian Konektivitas ICMP Ping
+```bash
+ping -c 3 192.168.2.3
+```
+* **`ping`**: Utilitas penguji keterjangkauan jaringan (*network reachability*) berbasis protokol kendali ICMP (*Internet Control Message Protocol*).
+* **`-c`** (*Count Flag*): Menentukan jumlah pengiriman paket permintaan ping.
+* **`3`**: Mengirimkan tepat 3 paket *ICMP Echo Request* lalu berhenti otomatis.
+* **`192.168.2.3`**: Alamat IP host tujuan yang diuji konektivitasnya.
+
+---
+
+### E. Perintah Eksploitasi Web via CLI (cURL)
+```bash
+curl -i -s "http://192.168.2.3/dvwa/vulnerabilities/sqli/?id=%27+OR+%271%27%3D%271&Submit=Submit"
+```
+* **`curl`** (*Client URL*): Program baris perintah untuk mentransfer data menuju atau dari server menggunakan berbagai protokol internet (HTTP, HTTPS, FTP).
+* **`-i`** (*Include Headers*): Menampilkan response header HTTP dari server (seperti `HTTP/1.1 200 OK`, `Server: Apache`, `Set-Cookie`) bersamaan dengan isi konten dokumen HTML.
+* **`-s`** (*Silent Mode*): Mode senyap yang menyembunyikan meteran indikator kecepatan/persentase transfer data agar tampilan terminal bersih.
+* **`"..."`** (*Quoted Target URL*): String alamat URL tujuan yang membawa muatan eksploitasi (*payload*). Tanda petik ganda wajib dipasang agar karakter khusus peramban seperti `?`, `&`, `=`, dan `'` tidak diinterpretasikan salah oleh shell Linux.
+
+---
+
+## 2. BEDAH LENGKAP PERINTAH TERMINAL VM 2 (UBUNTU SERVER - DEFENDER)
+
+---
 
 ### A. Validasi Sintaks Konfigurasi Suricata
 ```bash
 sudo suricata -T -c /etc/suricata/suricata.yaml -v
 ```
-* **`sudo`**: Hak akses root.
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk membaca file konfigurasi privat sistem.
 * **`suricata`**: Biner aplikasi mesin Intrusion Detection System (IDS).
-* **`-T`** (*Test configuration*): Menjalankan Suricata dalam mode uji coba sintaks. Suricata akan mengompilasi konfigurasi dan seluruh rules ke memori, memastikan tidak ada galat (error kurung/spasi/variabel), lalu langsung keluar tanpa sniffing antarmuka.
-* **`-c`** (*Config file path*): Menentukan jalur berkas konfigurasi master.
-* **`/etc/suricata/suricata.yaml`**: Jalur file konfigurasi master Suricata.
-* **`-v`** (*Verbose*): Menampilkan log inisialisasi detail langkah demi langkah ke layar terminal.
-
-### B. Live Reload Rules Tanpa Restart Layanan
-```bash
-sudo suricatasc -c reload-rules
-```
-* **`suricatasc`** (*Suricata Socket Client*): Utilitas CLI untuk berinteraksi langsung dengan daemon Suricata yang berjalan melalui UNIX domain socket (`suricata-command.socket`).
-* **`-c`** (*Command*): Memberikan instruksi spesifik ke socket Suricata.
-* **`reload-rules`**: Perintah agar Suricata membaca ulang file `.rules` dan menukarnya secara atomik di memori (*zero packet loss / zero downtime*).
-
-### C. Live Monitoring Log Alert
-```bash
-sudo tail -f /var/log/suricata/fast.log
-```
-* **`tail`**: Program pembaca baris paling akhir dari sebuah berkas teks.
-* **`-f`** (*Follow mode*): Mengunci terminal dalam status mendengarkan (*listen*). Setiap kali Suricata menulis baris peringatan serangan baru, terminal langsung menampilkannya secara real-time.
-* **`/var/log/suricata/fast.log`**: Berkas teks tempat Suricata mencatat alert ringkas satu baris (*single-line alert*).
-
-### D. Manajemen Service Systemd
-```bash
-sudo systemctl restart suricata
-sudo systemctl status suricata
-```
-* **`systemctl`** (*Systemd Control*): Utilitas pengendali sistem inisialisasi dan manajer layanan (*systemd*).
-* **`restart`**: Menghentikan proses secara total (*SIGTERM*) dan menyalakannya kembali dari nol.
-* **`status`**: Memeriksa status kesehatan layanan (apakah aktif hijau, PID proses, dan histori log).
-
-### E. Inspeksi Antarmuka Jaringan
-```bash
-ip -br a
-```
-* **`ip`**: Utilitas modern jaringan Linux (paket `iproute2`, pengganti `ifconfig`).
-* **`-br`** (*Brief*): Menampilkan data dalam format tabel satu baris ringkas per kartu jaringan.
-* **`a`** (*Address*): Menampilkan informasi alamat IPv4/IPv6 yang terpasang pada antarmuka.
-
-### F. Mode IPS Menggunakan Iptables & NFQUEUE
-```bash
-sudo iptables -I INPUT -p tcp --dport 80 -j NFQUEUE --queue-num 0
-sudo suricata -c /etc/suricata/suricata.yaml -q 0 -v
-```
-* **`iptables`**: Program firewall paket filter di kernel Linux.
-* **`-I INPUT`** (*Insert into INPUT chain*): Menyisipkan aturan di urutan paling awal pada rantai *INPUT* (lalu lintas masuk menuju server lokal).
-* **`-p tcp`** (*Protocol TCP*): Aturan hanya berlaku untuk protokol TCP.
-* **`--dport 80`** (*Destination Port 80*): Mengunci paket yang tujuannya ke port web 80.
-* **`-j NFQUEUE`** (*Jump to Netfilter Queue*): Aksi target. Paket ditahan di kernel dan dialihkan ke antrean memori *NFQUEUE*.
-* **`--queue-num 0`**: Nomor antrean memori yang digunakan (antrean nomor 0).
-* **`-q 0`** (*Queue 0 pada Suricata*): Memerintahkan Suricata untuk bertindak sebagai worker IPS yang menginspeksi antrean nomor 0. Paket normal diberi vonis `NF_ACCEPT`, paket jahat diberi vonis `NF_DROP`.
+* **`-T`** (*Test configuration flag*): Mode uji coba sintaks. Suricata akan mengompilasi konfigurasi dan seluruh berkas rules ke memori, memastikan tidak ada galat (error kurung/spasi/variabel), lalu langsung keluar (*exit*) tanpa mengaitkan antarmuka jaringan.
+* **`-c`** (*Config file flag*): Parameter penunjuk lokasi berkas konfigurasi utama.
+* **`/etc/suricata/suricata.yaml`**: Alamat berkas absolut konfigurasi master Suricata.
+* **`-v`** (*Verbose flag*): Menampilkan informasi log inisialisasi secara detail ke layar terminal (langkah alokasi memori, parsing rule, dan thread).
 
 ---
 
-## 3. BEDAH TOTAL KOMPONEN RULES SURICATA
-
-Setiap rule Suricata terbagi menjadi dua bagian besar:
-$$\text{RULE} = \mathbf{HEADER} + \mathbf{OPTIONS}$$
-
-```text
-[action] [protocol] [src_ip] [src_port] [direction] [dst_ip] [dst_port] ( [rule_options] )
+### B. Live Reload Rules Tanpa Mematikan Layanan
+```bash
+sudo suricatasc -c reload-rules
 ```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`suricatasc`** (*Suricata Socket Client*): Utilitas CLI untuk berinteraksi langsung dengan daemon Suricata yang berjalan melalui UNIX domain socket (`suricata-command.socket`).
+* **`-c`** (*Command flag*): Parameter penunjuk instruksi perintah yang harus dijalankan soket.
+* **`reload-rules`**: String perintah internal yang memerintahkan Suricata membaca ulang file `.rules` dan menukarnya secara atomik di memori (*zero packet loss / zero downtime*).
 
-### A. Komponen Rule Header (Di Luar Tanda Kurung)
-1. **Action (`alert` / `drop` / `reject` / `pass`):**
-   * `alert`: Catat peringatan ke log, izinkan paket lewat (Mode IDS).
-   * `drop`: Buang paket seketika tanpa balasan ke penyerang (Mode IPS).
-   * `reject`: Buang paket dan kirim sinyal putus TCP RST / ICMP Unreachable ke penyerang (Mode IPS).
-   * `pass`: Lewatkan paket dan abaikan seluruh rule lain (whitelist).
-2. **Protocol (`http`, `tcp`, `udp`, `icmp`, `ip`):**
-   * Menentukan parser protokol lapisan transport/aplikasi yang akan memproses paket.
-3. **Source IP & Source Port (`any any`):**
-   * Menentukan alamat IP dan port pengirim. Nilai `any any` berarti Suricata memeriksa paket dari alamat IP dan port berapa pun (karena port penyerang bersifat acak/ephemeral).
-4. **Direction Operator (`->`):**
-   * Menandakan arah lalu lintas data. `->` berarti satu arah (dari kiri/pengirim menuju kanan/penerima). `<>` berarti dua arah bolak-balik.
-5. **Destination IP (`$HOME_NET`):**
-   * Variabel yang didefinisikan pada `suricata.yaml` untuk mewakili jaringan atau server target yang dilindungi (contoh: `192.168.2.3/32`).
-6. **Destination Port (`80`, `53`, `any`):**
-   * Port tujuan layanan target. `80` untuk HTTP web server, `53` untuk DNS server, `any` untuk sembarang port.
+---
+
+### C. Live Monitoring Log Alert Real-Time
+```bash
+sudo tail -f /var/log/suricata/fast.log
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk membaca berkas log sistem.
+* **`tail`**: Utilitas Linux standar untuk mencetak bagian baris paling akhir dari sebuah berkas teks.
+* **`-f`** (*Follow mode flag*): Mengunci terminal dalam status mendengarkan (*listen*). Setiap kali ada baris peringatan serangan baru yang ditulis Suricata, terminal langsung menampilkannya seketika ke layar secara real-time.
+* **`/var/log/suricata/fast.log`**: Berkas teks tempat Suricata mencatat alert ringkas satu baris (*single-line alert*).
+
+---
+
+### D. Restart Layanan Daemon Suricata
+```bash
+sudo systemctl restart suricata
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`systemctl`** (*Systemd Control*): Utilitas pengontrol sistem inisialisasi dan manajer layanan (*systemd*).
+* **`restart`**: Menghentikan proses daemon secara total (*SIGTERM*) lalu menyalakannya kembali dari nol.
+* **`suricata`**: Nama unit layanan sistem (`suricata.service`).
+
+---
+
+### E. Pemeriksaan Status Kesehatan Layanan Suricata
+```bash
+sudo systemctl status suricata
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`systemctl`** (*Systemd Control*): Utilitas pengontrol layanan systemd.
+* **`status`**: Menampilkan ringkasan status operasional (apakah aktif hijau `active (running)`, PID proses, alokasi memori, dan histori baris log terakhir).
+* **`suricata`**: Nama unit layanan sistem (`suricata.service`).
+
+---
+
+### F. Inspeksi Antarmuka Jaringan & Alamat IP
+```bash
+ip -br a
+```
+* **`ip`**: Program pengelola antarmuka dan perutean jaringan (paket `iproute2`, pengganti utilitas lama `ifconfig`).
+* **`-br`** (*Brief flag*): Menampilkan data dalam format tabel ringkas satu baris per kartu jaringan.
+* **`a`** (*Address keyword*): Menampilkan informasi alamat IPv4 dan IPv6 yang terpasang pada antarmuka.
+
+---
+
+### G. Mode IPS: Pengalihan Paket ke Antrean Kernel via Iptables
+```bash
+sudo iptables -I INPUT -p tcp --dport 80 -j NFQUEUE --queue-num 0
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk memodifikasi tabel firewall kernel.
+* **`iptables`**: Program firewall paket filter bawaan kernel Linux.
+* **`-I`** (*Insert flag*): Menyisipkan aturan di urutan paling awal pada sebuah rantai firewall.
+* **`INPUT`**: Nama rantai firewall yang menangani seluruh paket yang datang dari jaringan luar menuju ke server lokal.
+* **`-p`** (*Protocol flag*): Menentukan protokol jaringan yang difilter.
+* **`tcp`**: Nilai protokol transport TCP.
+* **`--dport`** (*Destination Port flag*): Menentukan nomor port tujuan paket.
+* **`80`**: Nomor port web server HTTP Apache / DVWA.
+* **`-j`** (*Jump target flag*): Menentukan tindakan yang diambil jika paket cocok.
+* **`NFQUEUE`** (*Netfilter Queue target*): Membelokkan paket ke antrean memori kernel *Netfilter Queue* agar diperiksa oleh program IPS eksternal (Suricata).
+* **`--queue-num`** (*Queue Number flag*): Menentukan nomor antrean spesifik.
+* **`0`**: Nilai nomor antrean memori 0.
+
+---
+
+### H. Mode IPS: Menjalankan Suricata Memeriksa Antrean Kernel
+```bash
+sudo suricata -c /etc/suricata/suricata.yaml -q 0 -v
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk menginspeksi antrean kernel.
+* **`suricata`**: Biner aplikasi mesin IDS/IPS Suricata.
+* **`-c`** (*Config file flag*): Menentukan lokasi berkas konfigurasi utama.
+* **`/etc/suricata/suricata.yaml`**: Berkas konfigurasi master Suricata.
+* **`-q`** (*Queue mode flag*): Parameter penentu bahwa Suricata berjalan dalam **Mode IPS Inline** mendengarkan antrean kernel *NFQUEUE*.
+* **`0`**: Nilai nomor antrean memori kernel yang diperiksa (antrean nomor 0, sinkron dengan aturan iptables).
+* **`-v`** (*Verbose flag*): Menampilkan log operasional secara mendalam ke layar terminal.
+
+---
+
+## 3. BEDAH PERINTAH INSTALASI NATIVE LAMP STACK & DVWA
+
+---
+
+### A. Instalasi Paket Web Server, Database, dan Interpreter PHP
+```bash
+sudo apt update && sudo apt install -y apache2 mariadb-server php php-mysqli php-gd libapache2-mod-php git
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`apt`** (*Advanced Package Tool*): Program pengelola paket (*package manager*) distro Debian/Ubuntu.
+* **`update`**: Menyegarkan kembali indeks daftar paket lokal dari server cermin repositori Ubuntu.
+* **`&&`** (*Operator Logika AND*): Operator shell yang memastikan perintah kedua dieksekusi hanya jika perintah pertama berhasil tanpa error (*exit code 0*).
+* **`install`**: Subperintah `apt` untuk memasang paket perangkat lunak baru.
+* **`-y`** (*Automatic Yes flag*): Menjawab konfirmasi alokasi ruang penyimpanan secara otomatis dengan nilai "Yes".
+* **`apache2`**: Paket perangkat lunak web server HTTP Apache versi 2.
+* **`mariadb-server`**: Paket sistem manajemen basis data relasional (*RDBMS*) MariaDB (turunan MySQL).
+* **`php`**: Interpreter bahasa pemrograman PHP sisi server tempat DVWA berjalan.
+* **`php-mysqli`**: Driver ekstensi PHP untuk berkomunikasi dengan basis data MySQL/MariaDB.
+* **`php-gd`** (*Graphics Draw*): Ekstensi pustaka PHP untuk memproses grafik dan gambar (avatar/captcha).
+* **`libapache2-mod-php`**: Modul integrasi interpreter PHP langsung ke dalam worker web server Apache.
+* **`git`**: Perangkat lunak sistem pengontrol versi terdistribusi untuk mengunduh source code DVWA.
+
+---
+
+### B. Masuk ke Direktori Document Root Web
+```bash
+cd /var/www/html
+```
+* **`cd`** (*Change Directory*): Perintah dasar shell Linux untuk berpindah direktori kerja aktif.
+* **`/var/www/html`**: Jalur direktori standar (*Document Root*) web server Apache di Ubuntu. Seluruh file yang ditaruh di sini dapat diakses via peramban.
+
+---
+
+### C. Kloning Source Code DVWA dari Repositori GitHub
+```bash
+sudo git clone https://github.com/digininja/DVWA.git dvwa
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root untuk menulis direktori sistem `/var/www/html`.
+* **`git`**: Menjalankan biner git.
+* **`clone`**: Mengunduh salinan repositori kode sumber secara utuh dari server internet ke komputer lokal.
+* **`https://github.com/digininja/DVWA.git`**: Alamat URL repositori resmi proyek DVWA oleh Robin Wood (*digininja*).
+* **`dvwa`**: Nama folder lokal tujuan hasil kloning. Alamat web menjadi `http://192.168.2.3/dvwa/`.
+
+---
+
+### D. Menyalin Template Berkas Konfigurasi DVWA
+```bash
+sudo cp dvwa/config/config.inc.php.dist dvwa/config/config.inc.php
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`cp`** (*Copy*): Utilitas Linux untuk menyalin berkas.
+* **`dvwa/config/config.inc.php.dist`**: Berkas template konfigurasi bawaan developer (*distribution file*).
+* **`dvwa/config/config.inc.php`**: Berkas konfigurasi aktif yang dibaca oleh aplikasi web DVWA.
+
+---
+
+### E. Penyesuaian Hak Kepemilikan Berkas Web Server
+```bash
+sudo chown -R www-data:www-data /var/www/html/dvwa
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`chown`** (*Change Owner*): Perintah Linux untuk mengubah kepemilikan pengguna (*user*) dan grup (*group*) berkas/folder.
+* **`-R`** (*Recursive flag*): Menerapkan perubahan kepemilikan ke seluruh subdirektori dan file di dalamnya.
+* **`www-data:www-data`**: Pengguna sistem (`user:group`) yang menjalankan proses web server Apache. Diperlukan agar fitur upload dan penulisan database DVWA tidak terhalang galat *Permission Denied*.
+* **`/var/www/html/dvwa`**: Jalur direktori target.
+
+---
+
+### F. Penyesuaian Izin Hak Akses Berkas (Permissions)
+```bash
+sudo chmod -R 755 /var/www/html/dvwa
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`chmod`** (*Change Mode*): Perintah Linux untuk memodifikasi hak izin akses (*read, write, execute*).
+* **`-R`** (*Recursive flag*): Menerapkan aturan izin akses ke seluruh pohon folder dan file di bawahnya.
+* **`755`** (*Oktal Izin Akses*):
+  * Angka `7` (Owner `www-data`): Memiliki hak penuh **Read (4) + Write (2) + Execute (1)**.
+  * Angka `5` (Group `www-data`): Memiliki hak **Read (4) + Execute (1)**.
+  * Angka `5` (Others/Pengguna lain): Memiliki hak **Read (4) + Execute (1)**.
+* **`/var/www/html/dvwa`**: Direktori target.
+
+---
+
+### G. Inisialisasi Basis Data MariaDB via CLI Klien
+```bash
+sudo mysql -u root
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`mysql`**: Biner klien baris perintah untuk mengelola database MariaDB/MySQL.
+* **`-u`** (*User flag*): Parameter penunjuk nama akun database.
+* **`root`**: Nama akun pengguna administrator tertinggi sistem database.
+
+#### Kueri SQL Internal yang Dijalankan:
+```sql
+CREATE DATABASE dvwa;
+CREATE USER 'dvwa'@'localhost' IDENTIFIED BY 'p@ssw0rd';
+GRANT ALL PRIVILEGES ON dvwa.* TO 'dvwa'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+* **`CREATE DATABASE dvwa;`**: Membuat wadah skema basis data baru bernama `dvwa`.
+* **`CREATE USER 'dvwa'@'localhost'`**: Membuat entitas pengguna database bernama `dvwa` yang dibatasi koneksinya **hanya dari mesin lokal (`localhost`)**.
+* **`IDENTIFIED BY 'p@ssw0rd';`**: Menetapkan kata sandi autentikasi pengguna `dvwa` (nilai ini disinkronkan ke `config.inc.php`).
+* **`GRANT ALL PRIVILEGES ON dvwa.* TO 'dvwa'@'localhost';`**: Memberikan seluruh hak operasional manipulasi tabel (SELECT, INSERT, UPDATE, DELETE, CREATE, DROP) khusus pada skema database `dvwa`.
+* **`FLUSH PRIVILEGES;`**: Memaksa server database memuat ulang tabel hak akses (*grant tables*) ke memori seketika.
+* **`EXIT;`**: Menutup sesi klien SQL dan kembali ke shell Linux.
+
+---
+
+### H. Restart Web Server Apache
+```bash
+sudo systemctl restart apache2
+```
+* **`sudo`** (*SuperUser DO*): Hak akses root.
+* **`systemctl`** (*Systemd Control*): Utilitas pengelola daemon Linux.
+* **`restart`**: Menghentikan dan menyalakan kembali layanan Apache.
+* **`apache2`**: Nama unit daemon web server Apache.
 
 ---
 
@@ -170,20 +325,20 @@ Dalam protokol web HTTP (RFC 3986), karakter tertentu di dalam URI tidak boleh d
 
 Format URL Encoding adalah tanda persen (`%`) yang diikuti oleh **dua digit heksadesimal (basis 16)** yang merepresentasikan nilai byte karakter tersebut pada **Tabel ASCII (American Standard Code for Information Interchange)**.
 
-### A. Mengapa `%20` adalah Spasi?
-* Karakter **Spasi (*Space*)** memiliki nilai desimal ASCII **`32`**.
-* Konversi nilai desimal `32` ke sistem heksadesimal (basis 16):
-  $$32 = (2 \times 16^1) + (0 \times 16^0) = \mathbf{20_{16}}$$
-* Oleh karena itu, representasi URL Encoding untuk spasi ditulis sebagai **`%20`**.
+### A. Mengapa Spasi Ditulis `%20`? Kenapa Angka 20?
+* Karakter **Spasi (*Space*)** memiliki nilai nomor urut desimal ASCII **`32`**.
+* Konversi desimal `32` ke sistem bilangan heksadesimal (basis 16):
+  $$32 = (\mathbf{2} \times 16^1) + (\mathbf{0} \times 16^0) = \mathbf{20_{16}}$$
+* Oleh karena itu, representasi URL Encoding untuk spasi ditulis secara matematis sebagai **`%20`**.
 
-### B. Mengapa `%27` adalah Tanda Petik Tunggal (`'`)?
-* Karakter **Kutip Tunggal (*Single Quote / Apostrophe*)** memiliki nilai desimal ASCII **`39`**.
-* Konversi nilai desimal `39` ke sistem heksadesimal (basis 16):
-  $$39 = (2 \times 16^1) + (7 \times 16^0) = \mathbf{27_{16}}$$
-* Oleh karena itu, representasi URL Encoding untuk tanda petik tunggal ditulis sebagai **`%27`**.
+### B. Mengapa Tanda Petik Tunggal (`'`) Ditulis `%27`? Kenapa Angka 27?
+* Karakter **Kutip Tunggal (*Single Quote / Apostrophe*)** memiliki nilai nomor urut desimal ASCII **`39`**.
+* Konversi desimal `39` ke sistem bilangan heksadesimal (basis 16):
+  $$39 = (\mathbf{2} \times 16^1) + (\mathbf{7} \times 16^0) = \mathbf{27_{16}}$$
+* Oleh karena itu, representasi URL Encoding untuk tanda petik tunggal ditulis secara matematis sebagai **`%27`**.
 
 ### C. Mengapa Ada Tanda Plus (`+`) untuk Spasi?
-* Berdasarkan standar formulir web HTML (*MIME Type: `application/x-www-form-urlencoded`*), ketika pengguna mengetik spasi pada formulir pencarian (seperti input User ID di DVWA) dan mengirimkannya via metode GET, peramban secara otomatis mengonversi spasi menjadi tanda plus (**`+`**) sebelum dikirim ke server.
+* Berdasarkan standar pengiriman formulir web HTML (*MIME Type: `application/x-www-form-urlencoded`*), ketika pengguna mengetik spasi pada formulir pencarian (seperti input User ID di DVWA) dan mengirimkannya via metode HTTP GET, peramban secara otomatis mengonversi spasi menjadi tanda tambah (**`+`**) sebelum dikirim ke jaringan.
 * Inilah sebabnya mengapa regex PCRE kita wajib menangani spasi mentah (`\s+`), tanda tambah (`\+`), dan persen dua puluh (`%20`).
 
 ### D. Tabel Karakter URL Encoding Penting dalam Web Exploitation
@@ -229,7 +384,7 @@ $$\mathbf{pcre:"/}\text{pola\_ekspresi\_reguler}\mathbf{/}\text{modifiers}\mathb
 3. **`(\s+|\+|%20)` (Group 2 & Group 3 - Deteksi Pemisah Spasi):**
    * `\s`: Metakarakter yang mencocokkan sembarang karakter spasi putih (*whitespace*), mencakup spasi biasa (`0x20`), tab (`\t`), newline (`\n`), dan carriage return (`\r`).
    * `+` (*Quantifier One-or-More*): Mengharuskan token sebelumnya muncul **minimal 1 kali atau lebih banyak secara berurutan** (misal 1 spasi, 2 spasi, atau 5 spasi tetap cocok).
-   * `\+`: Mencocokkan tanda tambah literal (`+`). Karakter plus harus di-escape (`\+`) karena jika berdiri sendiri tanpa backslash, simbol `+` dianggap sebagai quantifier.
+   * `\+`: Mencocokkan tanda tambah literal (`+`). Karakter plus harus di-escape (`\+`) karena jika berdiri sendiri tanpa backslash, simbol `+` dianggap sebagai quantifier regex.
    * `%20`: Mencocokkan bentuk URL-encoded dari spasi.
 4. **`or` (Literal SQL Operator):** Mencocokkan kata kunci logika boolean SQL "or".
 5. **`/i` (Case-Insensitive Modifier):** Menjadikan pencocokan kebal terhadap variasi huruf besar dan huruf kecil. Kata `or`, `OR`, `Or`, maupun `oR` akan cocok secara identik.
@@ -283,7 +438,7 @@ Header protokol TCP (RFC 793) memiliki field kontrol ukuran 8-bit yang berisi be
 7. **ECE (ECN-Echo - Bit 6):** Notifikasi kemacetan jaringan (RFC 3168).
 8. **CWR (Congestion Window Reduced - Bit 7):** Konfirmasi bahwa jendela kemacetan telah diperkecil.
 
-### B. Mengapa Sintaksnya Tertulis `flags:S,12;`?
+### B. Mengapa Sintaksnya Tertulis `flags:S,12;`? Kenapa Angka 12?
 Format resmi kata kunci `flags` pada Snort dan Suricata adalah:
 $$\mathbf{flags:[check\_flags],[mask\_flags];}$$
 * **`check_flags` (Karakter sebelum koma):** Bendera yang **WAJIB AKTIF (bernilai 1)**. Huruf `S` berarti bendera **SYN** harus aktif.
@@ -334,20 +489,32 @@ $$\mathbf{threshold:type\ [type], track\ [by\_src|by\_dst], count\ [N], seconds\
 
 ## 9. BEDAH SELURUH BARIS RULES PRAKTIKUM
 
+Berikut adalah bedah mandiri lengkap untuk **setiap baris rule**. Seluruh parameter dibedah tuntas pada masing-masing rule tanpa ada yang dilewati.
+
+---
+
 ### Rule A: SYN Flood (Bab V Modul - sid:1000001)
 ```text
 alert tcp any any -> $HOME_NET 80 (msg:"POSSIBLE SYN FLOOD DETECTED"; flags:S,12; threshold:type threshold, track by_src, count 100, seconds 5; classtype:attempted-dos; sid:1000001; rev:1;)
 ```
-* **`alert`**: Aksi Mode IDS, catat kejadian ke berkas log.
-* **`tcp`**: Protokol transport TCP.
-* **`any any`**: Dari alamat IP dan port sumber mana pun.
-* **`->`**: Arah paket masuk satu arah.
-* **`$HOME_NET 80`**: Menuju IP server target yang dilindungi pada port layanan 80.
-* **`msg:"POSSIBLE SYN FLOOD DETECTED"`**: Teks pesan peringatan yang dicetak ke file log.
-* **`flags:S,12;`**: Memeriksa flag SYN aktif dengan masking bit ECN 1 & 2.
-* **`threshold:type threshold, track by_src, count 100, seconds 5;`**: Memicu alert jika penyerang mengirimkan 100 paket SYN dalam 5 detik.
-* **`classtype:attempted-dos;`**: Kategori percobaan penolakan layanan (Priority 2).
-* **`sid:1000001; rev:1;`**: Signature ID 1000001 revisi 1.
+* **`alert`**: Aksi Mode IDS. Jika paket cocok, catat peringatan ke berkas log (`fast.log`), paket asli tetap dilewatkan ke tujuan.
+* **`tcp`**: Protokol transport layer 4 yang diperiksa (Transmission Control Protocol).
+* **`any` (Source IP)**: Alamat IP pengirim penyerang dari mana saja.
+* **`any` (Source Port)**: Port pengirim penyerang dari nomor port berapa saja.
+* **`->`** (*Direction Operator*): Arah aliran lalu lintas satu arah (dari pengirim penyerang menuju server penerima).
+* **`$HOME_NET`**: Variabel alamat IP tujuan yang mewakili server korban yang dilindungi (didefinisikan di `suricata.yaml`, misal `192.168.2.3/32`).
+* **`80`**: Nomor port tujuan yang dilindungi (port layanan web HTTP Apache).
+* **`msg:"POSSIBLE SYN FLOOD DETECTED"`**: Teks pesan peringatan deskriptif yang dicetak ke file log saat serangan terdeteksi.
+* **`flags:S,12;`**:
+  * `S`: Bendera TCP **SYN** (*Synchronize*) wajib aktif bernilai 1.
+  * `,12`: Mengabaikan (*masking*) bit ECN 1 (CWR) dan bit ECN 2 (ECE) agar paket SYN dari OS modern yang mendukung ECN tetap terdeteksi.
+* **`threshold:type threshold, track by_src, count 100, seconds 5;`**:
+  * `type threshold`: Mengeluarkan alert setiap kali hitungan batas tercapai.
+  * `track by_src`: Perhitungan ambang batas dihitung berdasarkan satu alamat IP pengirim tunggal.
+  * `count 100, seconds 5`: Ambang batas: memicu alert jika penyerang mengirimkan minimal 100 paket SYN dalam kurun waktu 5 detik.
+* **`classtype:attempted-dos;`**: Klasifikasi kategori percobaan penolakan layanan (otomatis dipetakan oleh Suricata ke tingkat keparahan **Priority 2 / Medium**).
+* **`sid:1000001;`** (*Signature ID*): Nomor identitas pengenal unik rule (nomor $\ge 1.000.000$ dicadangkan khusus untuk rule lokal buatan pengguna).
+* **`rev:1;`** (*Revision*): Nomor versi perubahan rule (revisi ke-1).
 
 ---
 
@@ -355,13 +522,22 @@ alert tcp any any -> $HOME_NET 80 (msg:"POSSIBLE SYN FLOOD DETECTED"; flags:S,12
 ```text
 alert icmp any any -> $HOME_NET any (msg:"ICMP ECHO BURST DETECTED"; itype:8; threshold:type threshold, track by_src, count 8, seconds 5; classtype:attempted-dos; sid:1000002; rev:3;)
 ```
-* **`alert`**: Aksi mencatat log.
-* **`icmp`**: Protokol kendali jaringan ICMP.
-* **`any any -> $HOME_NET any`**: Paket ICMP dari mana saja menuju ke server target pada port mana saja.
-* **`itype:8;`**: Membatasi pencocokan hanya pada *ICMP Type 8 (Echo Request)*. Mencegah paket balasan server memicu false alarm.
-* **`threshold:type threshold, track by_src, count 8, seconds 5;`**: Memicu alert jika penyerang mengirim lebih dari 8 paket ping dalam 5 detik.
-* **`classtype:attempted-dos;`**: Klasifikasi Priority 2.
-* **`sid:1000002; rev:3;`**: Signature ID 1000002 revisi 3.
+* **`alert`**: Aksi Mode IDS. Catat kejadian ke log, paket tetap melintas.
+* **`icmp`**: Protokol kendali jaringan layer 3 *Internet Control Message Protocol* (protokol pengujian ping).
+* **`any` (Source IP)**: Alamat IP pengirim dari mana saja.
+* **`any` (Source Port)**: Protokol ICMP tidak memiliki nomor port, sehingga diisi `any`.
+* **`->`**: Arah lalu lintas paket masuk.
+* **`$HOME_NET`**: Alamat IP server target yang dilindungi.
+* **`any` (Destination Port)**: Port tujuan bernilai `any` karena ICMP bekerja di Layer 3 tanpa konsep nomor port Layer 4.
+* **`msg:"ICMP ECHO BURST DETECTED"`**: Teks pesan peringatan yang dicetak ke `fast.log`.
+* **`itype:8;`** (*ICMP Type 8*): Parameter filter tipe paket ICMP. Angka 8 adalah kode resmi untuk **Echo Request** (permintaan ping). Parameter ini penting agar paket balasan *Echo Reply* (Type 0) dari server tidak ikut memicu alert.
+* **`threshold:type threshold, track by_src, count 8, seconds 5;`**:
+  * `type threshold`: Mengeluarkan alert setiap kelipatan hitungan tercapai.
+  * `track by_src`: Menghitung laju paket berdasarkan IP pengirim tunggal.
+  * `count 8, seconds 5`: Memicu alert jika penyerang mengirimkan lebih dari 8 paket ping dalam rentang 5 detik.
+* **`classtype:attempted-dos;`**: Klasifikasi serangan penolakan layanan (Priority 2).
+* **`sid:1000002;`**: Signature ID 1000002.
+* **`rev:3;`**: Nomor revisi ke-3.
 
 ---
 
@@ -369,11 +545,21 @@ alert icmp any any -> $HOME_NET any (msg:"ICMP ECHO BURST DETECTED"; itype:8; th
 ```text
 alert udp any any -> $HOME_NET 53 (msg:"UDP BURST TO DNS PORT DETECTED"; threshold:type threshold, track by_src, count 8, seconds 5; classtype:attempted-dos; sid:1000003; rev:1;)
 ```
-* **`alert`**: Aksi mencatat log.
-* **`udp`**: Protokol transport UDP tanpa jabat tangan (*connectionless*).
-* **`-> $HOME_NET 53`**: Menuju port layanan DNS 53.
-* **`threshold:type threshold, track by_src, count 8, seconds 5;`**: Memicu alert jika terjadi lonjakan trafik UDP melebihi 8 paket dalam 5 detik (deteksi anomali *DNS Flood/Amplification*).
-* **`sid:1000003; rev:1;`**: Signature ID 1000003 revisi 1.
+* **`alert`**: Aksi Mode IDS. Catat kejadian ke log tanpa membuang paket.
+* **`udp`**: Protokol transport layer 4 *User Datagram Protocol* (tanpa koneksi / *connectionless*).
+* **`any` (Source IP)**: Alamat IP penyerang dari mana saja.
+* **`any` (Source Port)**: Port pengirim acak penyerang.
+* **`->`**: Arah lalu lintas paket masuk.
+* **`$HOME_NET`**: Alamat IP server tujuan yang dilindungi.
+* **`53`**: Nomor port tujuan DNS server (*Domain Name System*).
+* **`msg:"UDP BURST TO DNS PORT DETECTED"`**: Teks pesan peringatan di file log.
+* **`threshold:type threshold, track by_src, count 8, seconds 5;`**:
+  * `type threshold`: Memicu alert setiap ambang batas kelipatan tercapai.
+  * `track by_src`: Menghitung laju paket berdasarkan IP pengirim tunggal.
+  * `count 8, seconds 5`: Memicu alert jika penyerang mengirim lebih dari 8 paket UDP ke port 53 dalam kurun waktu 5 detik (indikasi *DNS Flood/Amplification*).
+* **`classtype:attempted-dos;`**: Kategori penolakan layanan (Priority 2).
+* **`sid:1000003;`**: Signature ID 1000003.
+* **`rev:1;`**: Nomor revisi ke-1.
 
 ---
 
@@ -381,14 +567,28 @@ alert udp any any -> $HOME_NET 53 (msg:"UDP BURST TO DNS PORT DETECTED"; thresho
 ```text
 alert http any any -> $HOME_NET 80 (msg:"[DVWA ATTACK] Terdeteksi Eksploitasi SQL Injection (Tautology Bypass)"; flow:established,to_server; http.uri; content:"/vulnerabilities/sqli/"; nocase; pcre:"/(%27|\')(\s+|\+|%20)or(\s+|\+|%20)/i"; classtype:web-application-attack; sid:1000021; rev:2;)
 ```
-* **`alert http any any -> $HOME_NET 80`**: Menginspeksi request protokol HTTP yang menyasar port 80 server target.
-* **`flow:established,to_server;`**: Memastikan sesi TCP telah terjalin dan arah paket bergerak dari klien menuju server.
-* **`http.uri;`**: Mengunci ruang lingkup pencarian hanya pada URI buffer.
-* **`content:"/vulnerabilities/sqli/";`**: String wajib yang memastikan target adalah modul rentan SQLi DVWA.
-* **`nocase;`**: Mengabaikan kapitalisasi huruf pada parameter `content`.
-* **`pcre:"/(%27|\')(\s+|\+|%20)or(\s+|\+|%20)/i";`**: Regex deteksi injeksi kutip tunggal (`'` atau `%27`) yang diikuti pemisah spasi/tanda tambah, kata kunci `or`, dan spasi berikutnya.
-* **`classtype:web-application-attack;`**: Kategori serangan aplikasi web (otomatis memetakan ke **Priority 1 / High**).
-* **`sid:1000021; rev:2;`**: Signature ID 1000021 revisi 2.
+* **`alert`**: Aksi Mode IDS. Catat bukti serangan ke log, izinkan paket lewat ke web server DVWA.
+* **`http`**: Parser protokol lapisan aplikasi HTTP Suricata yang mampu mengurai komponen request web.
+* **`any` (Source IP)**: Alamat IP penyerang dari mana saja.
+* **`any` (Source Port)**: Port pengirim peramban penyerang yang bersifat dinamis.
+* **`->`**: Arah lalu lintas paket satu arah dari klien penyerang ke server.
+* **`$HOME_NET`**: Alamat IP server web korban yang dilindungi (`192.168.2.3/32`).
+* **`80`**: Port layanan web server Apache target.
+* **`msg:"[DVWA ATTACK] Terdeteksi Eksploitasi SQL Injection (Tautology Bypass)"`**: Pesan peringatan yang dicetak ke `fast.log`.
+* **`flow:established,to_server;`**:
+  * `established`: Memastikan koneksi TCP telah menyelesaikan Three-Way Handshake secara sempurna.
+  * `to_server`: Hanya memeriksa paket yang mengalir dari arah klien penyerang menuju server korban, mengabaikan paket balasan server.
+* **`http.uri;`**: *Sticky buffer*. Menginstruksikan Suricata agar pencarian string hanya dilakukan pada pointer memori baris URL path dan parameter query.
+* **`content:"/vulnerabilities/sqli/";`**: Pola teks string yang wajib ada, memastikan request ditujukan ke modul rentan SQLi DVWA.
+* **`nocase;`**: Mengabaikan kapitalisasi huruf pada parameter `content` sebelumnya.
+* **`pcre:"/(%27|\')(\s+|\+|%20)or(\s+|\+|%20)/i";`**:
+  * `(%27|\')`: Menangkap karakter kutip tunggal URL-encoded (`%27`) atau kutip tunggal asli (`'`).
+  * `(\s+|\+|%20)`: Menangkap pemisah spasi putih (`\s+`), tanda tambah formulir browser (`\+`), atau encoding spasi (`%20`).
+  * `or`: Kata kunci operator logika SQL boolean.
+  * `/i`: Flag regex kebal terhadap huruf besar/kecil (`OR`, `or`, `Or`).
+* **`classtype:web-application-attack;`**: Kategori serangan aplikasi web (otomatis memetakan ke tingkat keparahan **Priority 1 / High**).
+* **`sid:1000021;`**: Signature ID unik 1000021.
+* **`rev:2;`**: Nomor revisi ke-2 (revisi perbaikan penanganan tanda `+`).
 
 ---
 
@@ -396,9 +596,28 @@ alert http any any -> $HOME_NET 80 (msg:"[DVWA ATTACK] Terdeteksi Eksploitasi SQ
 ```text
 alert http any any -> $HOME_NET 80 (msg:"[DVWA ATTACK] Terdeteksi Eksploitasi Reflected XSS (Event Handler Bypass)"; flow:established,to_server; http.uri; pcre:"/<(script|img|svg|iframe|video|source)[^>]+(src|onerror|onload)\s*=/Ui"; classtype:web-application-attack; sid:1000022; rev:2;)
 ```
-* **`pcre:"/<(script|img|svg|iframe|video|source)[^>]+(src|onerror|onload)\s*=/Ui";`**: Regex deteksi pembukaan tag HTML berbahaya (`<`) yang memuat atribut eksekusi skrip otomatis (`onerror=`, `onload=`) sebelum kurung siku tutup tag (`>`) muncul.
+* **`alert`**: Aksi Mode IDS. Catat bukti kejadian ke log, izinkan paket asli tetap melintas ke peramban tanpa diputus.
+* **`http`**: Protokol aplikasi web HTTP yang diurai oleh parser internal Suricata.
+* **`any` (Source IP)**: Alamat IP penyerang dari mana saja.
+* **`any` (Source Port)**: Port klien penyerang dari nomor port acak mana saja.
+* **`->`** (*Direction Operator*): Arah aliran paket satu arah dari klien menuju server korban.
+* **`$HOME_NET`**: Alamat IP server web korban yang dilindungi (`192.168.2.3/32`).
+* **`80`**: Nomor port layanan web HTTP Apache tempat DVWA berjalan.
+* **`msg:"[DVWA ATTACK] Terdeteksi Eksploitasi Reflected XSS (Event Handler Bypass)"`**: Pesan peringatan alert yang dicetak ke `fast.log`.
+* **`flow:established,to_server;`**:
+  * `established`: Memastikan sesi koneksi TCP telah terjalin sah melalui *Three-Way Handshake*.
+  * `to_server`: Memeriksa hanya paket permintaan yang mengalir dari arah klien penyerang menuju server korban (mengabaikan respon server).
+* **`http.uri;`**: *Sticky buffer*. Mengarahkan pencarian payload hanya pada baris URL request.
+* **`pcre:"/<(script|img|svg|iframe|video|source)[^>]+(src|onerror|onload)\s*=/Ui";`**:
+  * `<`: Karakter kurung siku buka pembuka tag HTML.
+  * `(script|img|svg|iframe|video|source)`: Daftar tag HTML yang umum disalahgunakan untuk eksekusi skrip (termasuk tag `<video>` dan `<source>` pada video dosen `XSS.mkv`).
+  * `[^>]+`: Negated character class. Menangkap sembarang karakter apa pun asalkan bukan kurung siku tutup `>`, memastikan atribut masih berada di dalam tag yang sama.
+  * `(src|onerror|onload)`: Daftar atribut eksekusi script otomatis peramban (*event handler*).
+  * `\s*=`: Tanda sama dengan yang didahului nol atau lebih karakter spasi.
+  * `/Ui`: Modifier `U` (evaluasi pada buffer normalized URI) dan `i` (case-insensitive).
 * **`classtype:web-application-attack;`**: Kategori serangan web (Priority 1).
-* **`sid:1000022; rev:2;`**: Signature ID 1000022 revisi 2.
+* **`sid:1000022;`**: Signature ID 1000022.
+* **`rev:2;`**: Nomor revisi ke-2.
 
 ---
 
@@ -406,10 +625,25 @@ alert http any any -> $HOME_NET 80 (msg:"[DVWA ATTACK] Terdeteksi Eksploitasi Re
 ```text
 alert http any any -> $HOME_NET 80 (msg:"[DVWA ATTACK] Terdeteksi Upaya Eksploitasi CSRF Ganti Password"; flow:established,to_server; http.uri; content:"/vulnerabilities/csrf/"; nocase; content:"password_new="; nocase; classtype:web-application-attack; sid:1000023; rev:1;)
 ```
-* **`content:"/vulnerabilities/csrf/"; nocase;`**: Mengunci endpoint spesifik modul pengubahan kredensial DVWA.
-* **`content:"password_new="; nocase;`**: Memeriksa keberadaan passing parameter sensitif pergantian kata sandi pada URI request.
-* **`classtype:web-application-attack;`**: Kategori serangan web (Priority 1).
-* **`sid:1000023; rev:1;`**: Signature ID 1000023 revisi 1.
+* **`alert`**: Aksi Mode IDS. Catat bukti kejadian ke log, izinkan paket tetap melintas ke tujuan.
+* **`http`**: Protokol lapisan aplikasi web HTTP.
+* **`any` (Source IP)**: Alamat IP penyerang dari mana saja.
+* **`any` (Source Port)**: Port pengirim klien penyerang yang bersifat dinamis.
+* **`->`** (*Direction Operator*): Arah paket satu arah dari klien penyerang menuju server penerima.
+* **`$HOME_NET`**: Alamat IP server web korban yang dilindungi (`192.168.2.3/32`).
+* **`80`**: Nomor port layanan web HTTP Apache tempat DVWA berjalan.
+* **`msg:"[DVWA ATTACK] Terdeteksi Upaya Eksploitasi CSRF Ganti Password"`**: Pesan alert yang dicetak ke `fast.log`.
+* **`flow:established,to_server;`**:
+  * `established`: Memastikan sesi TCP telah terbentuk sempurna.
+  * `to_server`: Memeriksa hanya paket yang mengalir menuju server (request klien).
+* **`http.uri;`**: *Sticky buffer*. Mengunci area pencarian string hanya pada baris URL request.
+* **`content:"/vulnerabilities/csrf/";`**: String pencocokan jalur direktori modul CSRF DVWA.
+* **`nocase;`**: Mengabaikan kapitalisasi huruf pada parameter content `/vulnerabilities/csrf/`.
+* **`content:"password_new=";`**: String pencocokan kedua yang mendeteksi parameter pergantian kata sandi pada URL.
+* **`nocase;`**: Mengabaikan kapitalisasi huruf pada parameter content `password_new=`.
+* **`classtype:web-application-attack;`**: Kategori serangan aplikasi web (Priority 1).
+* **`sid:1000023;`**: Signature ID 1000023.
+* **`rev:1;`**: Nomor revisi ke-1.
 
 ---
 
@@ -417,10 +651,21 @@ alert http any any -> $HOME_NET 80 (msg:"[DVWA ATTACK] Terdeteksi Upaya Eksploit
 ```text
 alert tcp any any -> $HOME_NET 80 (msg:"[DVWA ATTACK] Terdeteksi Serangan DoS TCP SYN Flood ke Port Layanan DVWA"; flags:S; threshold: type both, track by_src, count 15, seconds 3; classtype:denial-of-service; sid:1000024; rev:3;)
 ```
-* **`flags:S;`**: Memeriksa paket di mana bendera SYN aktif murni.
-* **`threshold: type both, track by_src, count 15, seconds 3;`**: Memicu alert satu kali ketika 15 paket SYN diterima dari IP yang sama dalam kurun waktu 3 detik, lalu menahan alert lanjutan selama interval tersebut agar storage log tidak jebol.
-* **`classtype:denial-of-service;`**: Klasifikasi DoS (otomatis memetakan ke **Priority 2 / Medium**).
-* **`sid:1000024; rev:3;`**: Signature ID 1000024 revisi 3.
+* **`alert`**: Aksi Mode IDS. Catat peringatan lonjakan paket ke berkas log tanpa membuang paket.
+* **`tcp`**: Protokol transport layer 4 TCP (Transmission Control Protocol).
+* **`any` (Source IP)**: Alamat IP penyerang dari mana saja.
+* **`any` (Source Port)**: Nomor port pengirim penyerang dari mana saja.
+* **`->`** (*Direction Operator*): Arah paket satu arah dari penyerang menuju server korban.
+* **`$HOME_NET`**: Alamat IP server target yang dilindungi (`192.168.2.3/32`).
+* **`80`**: Nomor port tujuan layanan web HTTP Apache target.
+* **`msg:"[DVWA ATTACK] Terdeteksi Serangan DoS TCP SYN Flood ke Port Layanan DVWA"`**: Pesan peringatan yang dicetak ke file log saat serangan terdeteksi.
+* **`threshold: type both, track by_src, count 15, seconds 3;`**:
+  * `type both`: Mengeluarkan alert tepat satu kali ketika batas 15 paket tercapai, lalu **menahan (*suppress*)** alert berulang selama jendela waktu 3 detik agar harddisk server tidak penuh akibat banjir log.
+  * `track by_src`: Menghitung laju paket berdasarkan satu alamat IP penyerang tunggal.
+  * `count 15, seconds 3`: Ambang batas sensitif: memicu alert jika penyerang mengirimkan minimal 15 paket SYN dalam kurun waktu 3 detik.
+* **`classtype:denial-of-service;`**: Klasifikasi kategori penolakan layanan (otomatis dipetakan Suricata ke **Priority 2 / Medium**).
+* **`sid:1000024;`**: Signature ID 1000024.
+* **`rev:3;`**: Nomor revisi ke-3.
 
 ---
 
@@ -428,8 +673,24 @@ alert tcp any any -> $HOME_NET 80 (msg:"[DVWA ATTACK] Terdeteksi Serangan DoS TC
 ```text
 drop http any any -> $HOME_NET 80 (msg:"[DVWA IPS BLOCK] SQL Injection Dropped"; flow:established,to_server; http.uri; content:"/vulnerabilities/sqli/"; nocase; pcre:"/(%27|\')(\s+|\+|%20)or(\s+|\+|%20)/i"; classtype:web-application-attack; sid:1000021; rev:5;)
 ```
-* **`drop`**: Aksi pencegahan intrusi aktif. Paket serangan langsung dimusnahkan oleh kernel Linux via antrean NFQUEUE. Paket tidak pernah mencapai port 80 web server Apache, peramban menampilkan galat *Connection Timed Out*, dan basis data pengguna batal bocor.
-* **Sisa parameter**: Identik dengan rule nomor 1, membuktikan bahwa perbedaan sintaks rule antara IDS dan IPS murni hanya pada kata aksi pertama (`alert` vs `drop`).
+* **`drop`**: **Aksi Pencegahan Mode IPS**. Memerintahkan kernel Linux melalui antrean NFQUEUE untuk seketika memusnahkan (*drop/discard*) paket serangan di memori kernel. Paket tidak pernah mencapai port 80 web server Apache, peramban penyerang menampilkan galat *Connection Timed Out*, dan basis data pengguna batal bocor.
+* **`http`**: Protokol aplikasi web HTTP.
+* **`any` (Source IP)**: Alamat IP penyerang dari mana saja.
+* **`any` (Source Port)**: Port pengirim klien penyerang dari mana saja.
+* **`->`** (*Direction Operator*): Arah aliran paket satu arah dari klien penyerang menuju server.
+* **`$HOME_NET`**: Alamat IP server web korban yang dilindungi (`192.168.2.3/32`).
+* **`80`**: Port layanan web server Apache target.
+* **`msg:"[DVWA IPS BLOCK] SQL Injection Dropped"`**: Teks pesan pemblokiran yang dicatat ke `fast.log` dengan label `[Drop]`.
+* **`flow:established,to_server;`**:
+  * `established`: Memastikan sesi koneksi TCP telah terjalin sah.
+  * `to_server`: Memeriksa hanya paket yang mengalir menuju server.
+* **`http.uri;`**: *Sticky buffer*. Mengarahkan pencarian payload hanya pada pointer memori baris URL path dan parameter query.
+* **`content:"/vulnerabilities/sqli/";`**: Pencocokan string direktori modul SQLi DVWA.
+* **`nocase;`**: Case-insensitive untuk parameter content.
+* **`pcre:"/(%27|\')(\s+|\+|%20)or(\s+|\+|%20)/i";`**: Regex penangkap pola tautologi kutip satu (`'` / `%27`), pemisah spasi/tanda tambah, dan kata kunci `or`.
+* **`classtype:web-application-attack;`**: Kategori serangan web (Priority 1).
+* **`sid:1000021;`**: Signature ID 1000021.
+* **`rev:5;`**: Nomor revisi ke-5 (revisi peningkatan ke aksi drop IPS).
 
 ---
 
@@ -444,3 +705,4 @@ drop http any any -> $HOME_NET 80 (msg:"[DVWA IPS BLOCK] SQL Injection Dropped";
 | **Dampak ke Penyerang** | Serangan sukses dieksekusi, database bocor | Serangan gagal total, koneksi diputus / *Timed Out* |
 | **Format Pencatatan Log** | Ditandai dengan `[**]` di `fast.log` | Ditandai dengan label `[Drop]` di `fast.log` |
 | **Risiko Operasional** | Nol risiko terhadap kelancaran layanan sah | Berisiko memblokir pengguna sah jika terjadi *False Positive* |
+| **Beban Latensi Jaringan** | 0 milidetik (hanya membaca salinan paket) | Ada sedikit latensi mikrodetik karena paket ditahan di antrean kernel |
