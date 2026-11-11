@@ -27,7 +27,7 @@
    - [Rule 2: Reflected XSS Event Handler Bypass (sid:1000022)](#rule-2-reflected-xss-event-handler-bypass-sid1000022)
    - [Rule 3: CSRF Unauthorized Password Change (sid:1000023)](#rule-3-csrf-unauthorized-password-change-sid1000023)
    - [Rule 4: DoS TCP SYN Flood Port 80 DVWA (sid:1000024)](#rule-4-dos-tcp-syn-flood-port-80-dvwa-sid1000024)
-   - [Rule 5: Mode IPS - SQL Injection Dropped (sid:1000021 rev:5)](#rule-5-mode-ips---sql-injection-dropped-sid1000021-rev5)
+   - [Rule 5: Mode IPS - SQL Injection Dropped (sid:1000025 rev:1)](#rule-5-mode-ips---sql-injection-dropped-sid1000025-rev1)
 10. [Konseptual Arsitektur: Mode IDS vs Mode IPS](#10-konseptual-arsitektur-mode-ids-vs-mode-ips)
 11. [FAQ Ujian Lisan: Menjalankan Suricata Mode IDS vs Memantau Log (`tail -f`)](#11-faq-ujian-lisan-menjalankan-suricata-mode-ids-vs-memantau-log)
 12. [Panduan Lengkap Cara Mengecek Path dan Lokasi fast.log](#12-panduan-lengkap-cara-mengecek-path-dan-lokasi-fastlog)
@@ -906,9 +906,9 @@ alert tcp any any -> $HOME_NET 80 (msg:"[DVWA ATTACK] Terdeteksi Serangan DoS TC
 
 ---
 
-### Rule 5: Mode IPS - SQL Injection Dropped (sid:1000021 rev:5)
+### Rule 5: Mode IPS - SQL Injection Dropped (sid:1000025 rev:1)
 ```text
-drop http any any -> $HOME_NET 80 (msg:"[DVWA IPS BLOCK] SQL Injection Dropped"; flow:established,to_server; http.uri; content:"/vulnerabilities/sqli/"; nocase; pcre:"/(%27|\')(\s+|\+|%20)or(\s+|\+|%20)/i"; classtype:web-application-attack; sid:1000021; rev:5;)
+drop http any any -> $HOME_NET 80 (msg:"[DVWA IPS BLOCK] SQL Injection Dropped"; flow:established,to_server; http.uri; content:"/vulnerabilities/sqli/"; nocase; pcre:"/(%27|\')(\s+|\+|%20)or(\s+|\+|%20)/i"; classtype:web-application-attack; sid:1000025; rev:1;)
 ```
 * **`drop`**: **Aksi Pencegahan Mode IPS**. Memerintahkan kernel Linux melalui antrean NFQUEUE untuk seketika memusnahkan (*drop/discard*) paket serangan di memori kernel. Paket tidak pernah mencapai port 80 web server Apache, peramban penyerang menampilkan galat *Connection Timed Out*, dan basis data pengguna batal bocor.
 * **`http`**: Protokol aplikasi web HTTP.
@@ -926,8 +926,8 @@ drop http any any -> $HOME_NET 80 (msg:"[DVWA IPS BLOCK] SQL Injection Dropped";
 * **`nocase;`**: Case-insensitive untuk parameter content.
 * **`pcre:"/(%27|\')(\s+|\+|%20)or(\s+|\+|%20)/i";`**: Regex penangkap pola tautologi kutip satu (`'` / `%27`), pemisah spasi/tanda tambah, dan kata kunci `or`.
 * **`classtype:web-application-attack;`**: Kategori serangan web (Priority 1).
-* **`sid:1000021;`**: Signature ID 1000021.
-* **`rev:5;`**: Nomor revisi ke-5 (revisi peningkatan ke aksi drop IPS).
+* **`sid:1000025;`**: Signature ID unik 1000025 (diberi nomor SID mandiri agar tidak bentrok atau menimpa Rule IDS 1000021 saat kedua rule berada dalam satu berkas `local.rules`).
+* **`rev:1;`**: Nomor revisi ke-1 untuk rule mode IPS.
 
 ---
 
@@ -1265,7 +1265,7 @@ Jika pengguna mencoba mengetik alamat tanpa HTTPS (misal mengetik `http://facebo
 Suricata dapat mendeteksi header `Host:` menggunakan sticky buffer **`http.host`**:
 
 ```text
-alert http $HOME_NET any -> $EXTERNAL_NET 80 (msg:"[POLICY VIOLATION] Akses HTTP Polos ke Facebook Terdeteksi"; flow:established,to_server; http.host; content:"facebook.com"; nocase; classtype:policy-violation; sid:1000045; rev:1;)
+alert http $HOME_NET any -> $EXTERNAL_NET 80 (msg:"[POLICY VIOLATION] Akses HTTP Polos ke Facebook Terdeteksi"; flow:established,to_server; http.host; content:"facebook.com"; classtype:policy-violation; sid:1000045; rev:2;)
 ```
 * **Bedah Kata per Kata:**
   * **`alert`**: Aksi Mode IDS, catat insiden ke log.
@@ -1280,11 +1280,10 @@ alert http $HOME_NET any -> $EXTERNAL_NET 80 (msg:"[POLICY VIOLATION] Akses HTTP
     * `established`: Memastikan sesi TCP telah terjalin melalui Three-Way Handshake.
     * `to_server`: Memeriksa hanya paket request yang mengalir menuju server luar.
   * **`http.host;`**: *Sticky buffer*. Mengarahkan pencarian string khusus pada baris header `Host:` di dalam paket HTTP request (misal: `Host: facebook.com`).
-  * **`content:"facebook.com";`**: Nama domain host yang dituju.
-  * **`nocase;`**: Mengabaikan kapitalisasi huruf besar dan kecil.
+  * **`content:"facebook.com";`**: Nama domain host yang dituju dalam huruf kecil murni. *(Catatan Suricata 7.x: Jangan menambahkan `nocase;` pada buffer `http.host` karena buffer hostname sudah dinormalisasi otomatis ke huruf kecil oleh engine. Menambahkan `nocase;` akan ditolak oleh parser Suricata 7 sebagai galat error parsing signature)*.
   * **`classtype:policy-violation;`**: Klasifikasi pelanggaran kebijakan jaringan.
   * **`sid:1000045;`**: Signature ID unik 1000045.
-  * **`rev:1;`**: Revisi ke-1.
+  * **`rev:2;`**: Revisi ke-2 (revisi penghapusan keyword redundan `nocase;` untuk kompatibilitas penuh Suricata 7.x).
 ---
 
 ### E. Aturan Mode IPS: Pemblokiran Akses Media Sosial (Action Drop)
